@@ -66,6 +66,8 @@ export class GoogleMapsScraper {
         '--disable-dev-shm-usage',
       ],
       executablePath: executablePath || undefined,
+      // If we couldn't find a specific path locally, use the system's Chrome channel
+      channel: !isProduction && !executablePath ? 'chrome' : undefined,
       headless: true,
     });
 
