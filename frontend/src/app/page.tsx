@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 async function fetchAPI(endpoint: string, options?: RequestInit) {
   const res = await fetch(`${API_URL}${endpoint}`, {
@@ -38,10 +38,23 @@ interface Lead {
   category?: string;
   rating?: number;
   reviewCount?: number;
+  priceLevel?: string;
+  description?: string;
+  openingHours?: string[];
+  attributes?: string[];
   source: string;
   status: string;
   isHotLead: boolean;
   priority: string;
+  aiScore?: number;
+  aiPotential?: string;
+  aiJustification?: string;
+  aiRecommendedServices?: string[];
+  aiOutreachAngle?: string;
+  aiFollowUpMessage?: string;
+  aiConversionProbability?: number;
+  aiPainPoints?: string[];
+  aiIdealSolution?: string;
   createdAt: string;
 }
 
@@ -219,6 +232,7 @@ export default function Dashboard() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#0f172a' }}>{lead.businessName || lead.fullName}</h3>
                     {lead.isHotLead && <span style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600 }}><Flame style={{ width: 12, height: 12 }} /> Hot</span>}
+                    {lead.aiPotential === 'hot' && <span style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#f0f9ff', color: '#0369a1', fontSize: 12, fontWeight: 600 }}>🤖 AI High</span>}
                   </div>
                   {lead.category && <p style={{ margin: '4px 0 0', fontSize: 14, color: '#64748b' }}>{lead.category}</p>}
                 </div>
@@ -243,7 +257,113 @@ export default function Dashboard() {
                   </span>
                 )}
                 {lead.city && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 14, color: '#64748b' }}><MapPin style={{ width: 16, height: 16 }} /> {lead.city}</span>}
+                {lead.priceLevel && <span style={{ padding: '2px 8px', background: '#fef3c7', color: '#92400e', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>{lead.priceLevel}</span>}
+                {lead.openingHours && lead.openingHours.length > 0 && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, padding: '2px 8px', background: '#f1f5f9', color: '#475569', borderRadius: 6 }}>
+                    <Clock style={{ width: 14, height: 14 }} /> {lead.openingHours[0].split('⋅')[0]}
+                  </span>
+                )}
               </div>
+
+              {lead.attributes && lead.attributes.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+                  {lead.attributes.slice(0, 4).map(attr => (
+                    <span key={attr} style={{ fontSize: 11, color: '#10b981', background: '#ecfdf5', padding: '2px 8px', borderRadius: 4, fontWeight: 500 }}>
+                      ✓ {attr}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {lead.description && (
+                <p style={{ margin: '0 0 16px', fontSize: 13, color: '#475569', fontStyle: 'italic', lineHeight: 1.4, borderLeft: '3px solid #e2e8f0', paddingLeft: 12 }}>
+                  "{lead.description}"
+                </p>
+              )}
+
+              <div style={{ marginBottom: 20 }}>
+                {lead.aiScore && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <div>
+                          <span style={{ display: 'block', fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Match Score</span>
+                          <span style={{ fontSize: 18, fontWeight: 800, color: lead.aiScore >= 80 ? '#16a34a' : '#2563eb' }}>{lead.aiScore}%</span>
+                        </div>
+                        {lead.aiConversionProbability && (
+                          <div>
+                            <span style={{ display: 'block', fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Conversion</span>
+                            <span style={{ fontSize: 18, fontWeight: 800, color: '#7c3aed' }}>{lead.aiConversionProbability}%</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ width: '100%', height: 6, background: '#f1f5f9', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ width: `${lead.aiScore}%`, height: '100%', background: lead.aiScore >= 80 ? 'linear-gradient(90deg, #10b981, #34d399)' : 'linear-gradient(90deg, #6366f1, #818cf8)' }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {lead.aiJustification && (
+                <div style={{ marginBottom: 16, padding: '16px', background: '#f8fafc', borderRadius: 14, border: '1px solid #e2e8f0', position: 'relative' }}>
+                  <div style={{ position: 'absolute', top: -10, left: 12, padding: '2px 8px', background: '#334155', color: 'white', borderRadius: 6, fontSize: 10, fontWeight: 700 }}>AI STRATEGY</div>
+
+                  <p style={{ margin: '0 0 12px', fontSize: 13, color: '#1e293b', lineHeight: 1.5 }}>
+                    {lead.aiJustification}
+                  </p>
+
+                  {(lead.aiOutreachAngle || lead.aiFollowUpMessage) && (
+                    <div style={{ padding: '12px', background: 'white', borderRadius: 12, border: '1px solid #cbd5e1', marginBottom: 12 }}>
+                      {lead.aiOutreachAngle && (
+                        <div style={{ marginBottom: 10 }}>
+                          <span style={{ display: 'block', fontSize: 10, color: '#64748b', fontWeight: 700, marginBottom: 4, letterSpacing: '0.05em' }}>PRIMARY HOOK</span>
+                          <p style={{ margin: 0, fontSize: 12, color: '#0f172a', fontWeight: 500, lineHeight: 1.4 }}>"{lead.aiOutreachAngle}"</p>
+                        </div>
+                      )}
+                      {lead.aiFollowUpMessage && (
+                        <div>
+                          <span style={{ display: 'block', fontSize: 10, color: '#64748b', fontWeight: 700, marginBottom: 4, letterSpacing: '0.05em' }}>FOLLOW-UP</span>
+                          <p style={{ margin: 0, fontSize: 12, color: '#475569', fontStyle: 'italic', lineHeight: 1.4 }}>"{lead.aiFollowUpMessage}"</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {lead.aiPainPoints && lead.aiPainPoints.length > 0 && (
+                    <div style={{ marginBottom: 12 }}>
+                      <span style={{ display: 'block', fontSize: 10, color: '#ef4444', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>PAIN POINTS</span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {lead.aiPainPoints.map(point => (
+                          <span key={point} style={{ padding: '2px 8px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: 6, fontSize: 11, color: '#b91c1c' }}>
+                            ✕ {point}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {lead.aiIdealSolution && (
+                    <div style={{ padding: '12px', background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', borderRadius: 12, border: '1px solid #bbf7d0', marginBottom: 12 }}>
+                      <span style={{ display: 'block', fontSize: 10, color: '#15803d', fontWeight: 700, marginBottom: 4, letterSpacing: '0.05em' }}>IDEAL SOLUTION</span>
+                      <p style={{ margin: 0, fontSize: 13, color: '#166534', fontWeight: 600 }}>{lead.aiIdealSolution}</p>
+                    </div>
+                  )}
+
+                  {lead.aiRecommendedServices && lead.aiRecommendedServices.length > 0 && (
+                    <div>
+                      <span style={{ display: 'block', fontSize: 10, color: '#64748b', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>RECOMMENDED SERVICES</span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {lead.aiRecommendedServices.map(service => (
+                          <span key={service} style={{ padding: '4px 10px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 11, color: '#475569', fontWeight: 600, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                            {service}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 {lead.phone && (
@@ -271,18 +391,20 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {filteredLeads.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 80 }}>
-            <div style={{ width: 80, height: 80, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-              <Search style={{ width: 32, height: 32, color: '#94a3b8' }} />
+        {
+          filteredLeads.length === 0 && (
+            <div style={{ textAlign: 'center', padding: 80 }}>
+              <div style={{ width: 80, height: 80, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+                <Search style={{ width: 32, height: 32, color: '#94a3b8' }} />
+              </div>
+              <h3 style={{ fontSize: 20, fontWeight: 600, color: '#0f172a', margin: '0 0 8px' }}>No leads found</h3>
+              <p style={{ fontSize: 15, color: '#64748b', margin: '0 0 24px' }}>Start by scraping some leads from Google Maps</p>
+              <button onClick={() => setScraperOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 28px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', fontSize: 15, fontWeight: 600, cursor: 'pointer', boxShadow: '0 8px 20px rgba(102,126,234,0.4)' }}>
+                <Search style={{ width: 18, height: 18 }} /> Scrape Leads
+              </button>
             </div>
-            <h3 style={{ fontSize: 20, fontWeight: 600, color: '#0f172a', margin: '0 0 8px' }}>No leads found</h3>
-            <p style={{ fontSize: 15, color: '#64748b', margin: '0 0 24px' }}>Start by scraping some leads from Google Maps</p>
-            <button onClick={() => setScraperOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 28px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', fontSize: 15, fontWeight: 600, cursor: 'pointer', boxShadow: '0 8px 20px rgba(102,126,234,0.4)' }}>
-              <Search style={{ width: 18, height: 18 }} /> Scrape Leads
-            </button>
-          </div>
-        )}
+          )
+        }
       </main>
 
       {/* Scraper Modal */}

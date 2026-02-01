@@ -29,6 +29,10 @@ export interface ILead extends Document {
   category?: string;
   rating?: number;
   reviewCount?: number;
+  priceLevel?: string;
+  description?: string;
+  openingHours?: string[];
+  attributes?: string[];
 
   // Location
   address?: string;
@@ -51,6 +55,17 @@ export interface ILead extends Document {
   lastContactedAt?: Date;
   nextFollowUpAt?: Date;
 
+  // AI Analysis
+  aiScore?: number;
+  aiPotential?: string;
+  aiJustification?: string;
+  aiRecommendedServices?: string[];
+  aiOutreachAngle?: string;
+  aiFollowUpMessage?: string;
+  aiConversionProbability?: number;
+  aiPainPoints?: string[];
+  aiIdealSolution?: string;
+
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
@@ -70,12 +85,16 @@ const LeadSchema = new Schema<ILead>(
     category: { type: String, trim: true },
     rating: { type: Number },
     reviewCount: { type: Number },
+    priceLevel: { type: String },
+    description: { type: String },
+    openingHours: [{ type: String }],
+    attributes: [{ type: String }],
 
     // Location
     address: { type: String },
     city: { type: String, index: true },
     state: { type: String },
-    country: { type: String, default: 'India' },
+    country: { type: String, index: true },
 
     // Lead Metadata
     source: { type: String, enum: LEAD_SOURCES, default: 'manual', index: true },
@@ -91,6 +110,17 @@ const LeadSchema = new Schema<ILead>(
     // Tracking
     lastContactedAt: { type: Date },
     nextFollowUpAt: { type: Date, index: true },
+
+    // AI Analysis
+    aiScore: { type: Number },
+    aiPotential: { type: String },
+    aiJustification: { type: String },
+    aiRecommendedServices: [{ type: String }],
+    aiOutreachAngle: { type: String },
+    aiFollowUpMessage: { type: String },
+    aiConversionProbability: { type: Number },
+    aiPainPoints: [{ type: String }],
+    aiIdealSolution: { type: String },
   },
   {
     timestamps: true,

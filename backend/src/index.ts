@@ -3,6 +3,7 @@ import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
 import { Lead } from './models/Lead';
+import { analyzeLead } from './services/ai/geminiService';
 import { scrapeGoogleMaps } from './services/scraper/googleMapsScraper';
 
 const app = express();
@@ -36,15 +37,17 @@ const connectDB = async () => {
     console.log('');
     console.log('   For now, scraping will work but leads won\'t persist.');
   }
+
+  if (process.env.GEMINI_API_KEY) {
+    console.log('✅ AI connected');
+  } else {
+    console.log('⚠️ AI not connected. Set GEMINI_API_KEY in .env');
+  }
 };
 
 connectDB();
 
-// ============================================
-// LEAD ROUTES
-// ============================================
 
-// Get all leads with filters
 app.get('/api/leads', async (req, res) => {
   try {
     if (mongoose.connection.readyState !== 1) {
@@ -209,38 +212,65 @@ app.post('/api/scraper/google-maps', async (req, res) => {
 
     if (mongoose.connection.readyState === 1) {
       for (const scraped of scrapedLeads) {
-        // Check for duplicates by phone or business name
-        const existing = await Lead.findOne({
-          $or: [
-            ...(scraped.phone ? [{ phone: scraped.phone }] : []),
-            { businessName: scraped.businessName },
-          ],
-        });
+        try {
+          // Check for duplicates by phone or business name
+          const existing = await Lead.findOne({
+            $or: [
+              ...(scraped.phone ? [{ phone: scraped.phone }] : []),
+              { businessName: scraped.businessName },
+            ],
+          });
 
-        if (existing) {
-          duplicateCount++;
-          continue;
+          if (existing) {
+            duplicateCount++;
+            continue;
+          }
+
+          // Perform AI Analysis for intelligent qualification
+          console.log(`🤖 Analyzing lead with Gemini: ${scraped.businessName}...`);
+          const aiAnalysis = await analyzeLead(scraped);
+
+          const lead = new Lead({
+            fullName: scraped.businessName,
+            businessName: scraped.businessName,
+            phone: scraped.phone,
+            website: scraped.website,
+            address: scraped.address,
+            city: scraped.city || location,
+            category: scraped.category,
+            rating: scraped.rating,
+            reviewCount: scraped.reviewCount,
+            priceLevel: scraped.priceLevel,
+            description: scraped.description,
+            openingHours: scraped.openingHours,
+            attributes: scraped.attributes,
+            country: scraped.address?.split(',').pop()?.trim() || 'India', // Try to get the last part of address
+            source: 'google_maps',
+            status: 'new',
+            isHotLead: aiAnalysis.score >= 80 || !!(scraped.rating && scraped.rating >= 4.0 && scraped.phone),
+            priority: aiAnalysis.leadType === 'hot' ? 'high' : (scraped.rating && scraped.rating >= 4.0 ? 'high' : 'medium'),
+
+            // AI Data
+            aiScore: aiAnalysis.score,
+            aiPotential: aiAnalysis.leadType,
+            aiJustification: aiAnalysis.reason,
+            aiRecommendedServices: aiAnalysis.whatToSell,
+            aiOutreachAngle: aiAnalysis.firstMessageHook,
+            aiFollowUpMessage: aiAnalysis.followUpMessage,
+            aiConversionProbability: aiAnalysis.conversionProbability,
+            aiPainPoints: aiAnalysis.painPoints,
+            aiIdealSolution: aiAnalysis.idealSolution,
+            notes: `AI Analysis: ${aiAnalysis.reason}\nRecommended: ${aiAnalysis.whatToSell.join(', ')}`,
+          });
+
+          await lead.save();
+          savedCount++;
+          if (lead.isHotLead) hotLeadCount++;
+        } catch (leadError: any) {
+          console.error(`❌ Error processing lead "${scraped.businessName}":`, leadError.message);
+          // Still try to save basic data if AI/full-save failed?
+          // Actually, let's just log and continue to the next one to be safe.
         }
-
-        const lead = new Lead({
-          fullName: scraped.businessName,
-          businessName: scraped.businessName,
-          phone: scraped.phone,
-          website: scraped.website,
-          address: scraped.address,
-          city: scraped.city || location,
-          category: scraped.category,
-          rating: scraped.rating,
-          reviewCount: scraped.reviewCount,
-          source: 'google_maps',
-          status: 'new',
-          isHotLead: !!(scraped.rating && scraped.rating >= 4.0 && scraped.phone),
-          priority: scraped.rating && scraped.rating >= 4.0 ? 'high' : 'medium',
-        });
-
-        await lead.save();
-        savedCount++;
-        if (lead.isHotLead) hotLeadCount++;
       }
     } else {
       // Count hot leads even without saving

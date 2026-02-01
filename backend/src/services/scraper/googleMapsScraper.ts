@@ -10,6 +10,11 @@ export interface ScrapedLead {
   rating?: number;
   reviewCount?: number;
   category?: string;
+  priceLevel?: string;
+  description?: string;
+  openingHours?: string[];
+  attributes?: string[];
+  country?: string;
 }
 
 export interface ScraperConfig {
@@ -109,31 +114,19 @@ export class GoogleMapsScraper {
               const h1 = document.querySelector('h1.DUwDvf, h1.fontHeadlineLarge');
               if (h1) name = h1.textContent?.trim() || '';
 
-              // Phone - look for the phone button/link
+              // Phone
               let phone = '';
-              // Method 1: data-item-id
               const phoneBtn = document.querySelector('button[data-item-id^="phone:"], a[data-item-id^="phone:"]');
               if (phoneBtn) {
                 const itemId = phoneBtn.getAttribute('data-item-id') || '';
                 phone = itemId.replace('phone:tel:', '').replace('phone:', '');
               }
-              // Method 2: aria-label with phone
               if (!phone) {
                 const phoneElements = document.querySelectorAll('[aria-label*="Phone"], [aria-label*="phone"]');
                 phoneElements.forEach(el => {
                   const label = el.getAttribute('aria-label') || '';
                   const match = label.match(/[\d\s\-\+]{8,}/);
                   if (match && !phone) phone = match[0].replace(/\s/g, '');
-                });
-              }
-              // Method 3: look in the info panel for phone pattern
-              if (!phone) {
-                const infoButtons = document.querySelectorAll('button.CsEnBe');
-                infoButtons.forEach(btn => {
-                  const text = btn.textContent || '';
-                  // Indian phone pattern or international
-                  const match = text.match(/(?:\+91|0)?[\s-]?\d{5}[\s-]?\d{5}|\d{10,}/);
-                  if (match && !phone) phone = match[0].replace(/\s|-/g, '');
                 });
               }
 
@@ -150,7 +143,7 @@ export class GoogleMapsScraper {
                 if (textDiv) address = textDiv.textContent?.trim() || '';
               }
 
-              // Rating
+              // Rating & Reviews
               let rating = 0;
               let reviewCount = 0;
               const ratingDiv = document.querySelector('div.F7nice');
@@ -159,13 +152,9 @@ export class GoogleMapsScraper {
                 spans.forEach(span => {
                   const text = span.textContent || '';
                   const num = parseFloat(text);
-                  if (!isNaN(num) && num > 0 && num <= 5 && !rating) {
-                    rating = num;
-                  }
+                  if (!isNaN(num) && num > 0 && num <= 5 && !rating) rating = num;
                   const reviewMatch = text.match(/\(([\d,]+)\)/);
-                  if (reviewMatch) {
-                    reviewCount = parseInt(reviewMatch[1].replace(/,/g, ''), 10);
-                  }
+                  if (reviewMatch) reviewCount = parseInt(reviewMatch[1].replace(/,/g, ''), 10);
                 });
               }
 
@@ -174,7 +163,36 @@ export class GoogleMapsScraper {
               const categoryBtn = document.querySelector('button[jsaction*="category"]');
               if (categoryBtn) category = categoryBtn.textContent?.trim() || '';
 
-              return { name, phone, website, address, rating, reviewCount, category };
+              // NEW: Price Level
+              let priceLevel = '';
+              const priceEl = document.querySelector('span[aria-label*="Price:"]');
+              if (priceEl) priceLevel = priceEl.getAttribute('aria-label') || '';
+              else {
+                const priceSpans = Array.from(document.querySelectorAll('span')).filter(s => s.textContent?.includes('₹') || s.textContent?.includes('$'));
+                if (priceSpans.length > 0) priceLevel = priceSpans[0].textContent?.trim() || '';
+              }
+
+              // NEW: Description
+              let description = '';
+              const descEl = document.querySelector('div.PYvS2b');
+              if (descEl) description = descEl.textContent?.trim() || '';
+
+              // NEW: Attributes (Quick chips)
+              let attributes: string[] = [];
+              const attrEls = document.querySelectorAll('div.LT7H9b span button');
+              attrEls.forEach(el => {
+                if (el.textContent) attributes.push(el.textContent.trim());
+              });
+
+              // NEW: Opening Hours Status
+              let openingHours: string[] = [];
+              const hoursEl = document.querySelector('div.t3970d');
+              if (hoursEl) {
+                const statusText = hoursEl.getAttribute('aria-label') || hoursEl.textContent || '';
+                openingHours.push(statusText.trim());
+              }
+
+              return { name, phone, website, address, rating, reviewCount, category, priceLevel, description, attributes, openingHours };
             });
 
             processedCount = i + 1;
@@ -193,6 +211,10 @@ export class GoogleMapsScraper {
                 category: details.category || undefined,
                 rating: details.rating || undefined,
                 reviewCount: details.reviewCount || undefined,
+                priceLevel: details.priceLevel || undefined,
+                description: details.description || undefined,
+                openingHours: details.openingHours.length > 0 ? details.openingHours : undefined,
+                attributes: details.attributes.length > 0 ? details.attributes : undefined,
               });
 
               console.log(`✅ ${leads.length}/${limit}: ${details.name}`);
