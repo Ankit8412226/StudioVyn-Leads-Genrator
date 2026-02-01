@@ -47,7 +47,7 @@ export class GoogleMapsScraper {
       executablePath: isProduction
         ? await chromium.executablePath()
         : process.env.PUPPETEER_EXECUTABLE_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      headless: isProduction ? (chromium.headless as any) : true,
+      headless: isProduction ? true : true,
     });
 
     this.page = await this.browser.newPage();

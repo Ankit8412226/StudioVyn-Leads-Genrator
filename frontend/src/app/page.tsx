@@ -292,7 +292,7 @@ export default function Dashboard() {
                         </div>
                         {lead.aiConversionProbability && (
                           <div>
-                            <span style={{ display: 'block', fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Conversion</span>
+                            <span style={{ display: 'block', fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Closing Prob.</span>
                             <span style={{ fontSize: 18, fontWeight: 800, color: '#7c3aed' }}>{lead.aiConversionProbability}%</span>
                           </div>
                         )}
@@ -307,9 +307,9 @@ export default function Dashboard() {
 
               {lead.aiJustification && (
                 <div style={{ marginBottom: 16, padding: '16px', background: '#f8fafc', borderRadius: 14, border: '1px solid #e2e8f0', position: 'relative' }}>
-                  <div style={{ position: 'absolute', top: -10, left: 12, padding: '2px 8px', background: '#334155', color: 'white', borderRadius: 6, fontSize: 10, fontWeight: 700 }}>AI STRATEGY</div>
+                  <div style={{ position: 'absolute', top: -10, left: 12, padding: '2px 10px', background: '#4f46e5', color: 'white', borderRadius: 6, fontSize: 10, fontWeight: 800, letterSpacing: '0.05em' }}>CLOSING STRATEGY (Agency Owner Guide)</div>
 
-                  <p style={{ margin: '0 0 12px', fontSize: 13, color: '#1e293b', lineHeight: 1.5 }}>
+                  <p style={{ margin: '4px 0 12px', fontSize: 13, color: '#1e293b', lineHeight: 1.5, fontWeight: 500 }}>
                     {lead.aiJustification}
                   </p>
 
