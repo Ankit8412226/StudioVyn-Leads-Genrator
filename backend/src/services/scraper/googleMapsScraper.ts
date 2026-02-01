@@ -1,4 +1,5 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
+import chromium from '@sparticuz/chromium';
+import puppeteer, { Browser, Page } from 'puppeteer-core';
 
 export interface ScrapedLead {
   businessName: string;
@@ -33,17 +34,22 @@ export class GoogleMapsScraper {
   private page: Page | null = null;
 
   async init(): Promise<void> {
-    console.log('🚀 Starting browser...');
+    console.log('🚀 Starting browser (Serverless Optimized)...');
+
+    const isProduction = process.env.NODE_ENV === 'production';
+
     this.browser = await puppeteer.launch({
-      headless: true,
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: [
+      args: isProduction ? chromium.args : [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--window-size=1920,1080',
       ],
+      executablePath: isProduction
+        ? await chromium.executablePath()
+        : process.env.PUPPETEER_EXECUTABLE_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      headless: isProduction ? (chromium.headless as any) : true,
     });
+
     this.page = await this.browser.newPage();
     await this.page.setViewport({ width: 1920, height: 1080 });
     await this.page.setUserAgent(
