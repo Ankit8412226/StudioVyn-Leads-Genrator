@@ -38,16 +38,35 @@ export class GoogleMapsScraper {
 
     const isProduction = process.env.NODE_ENV === 'production';
 
+    let executablePath = '';
+    if (isProduction) {
+      executablePath = await chromium.executablePath();
+    } else {
+      // Robust path detection for Mac local dev
+      const possiblePaths = [
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
+        `${process.env.HOME}/.cache/puppeteer/chrome/mac_arm-144.0.7559.96/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+        `${process.env.HOME}/.cache/puppeteer/chrome/mac_arm-127.0.6533.88/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`
+      ];
+
+      for (const path of possiblePaths) {
+        if (path && require('fs').existsSync(path)) {
+          executablePath = path;
+          break;
+        }
+      }
+    }
+
     this.browser = await puppeteer.launch({
       args: isProduction ? chromium.args : [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
       ],
-      executablePath: isProduction
-        ? await chromium.executablePath()
-        : process.env.PUPPETEER_EXECUTABLE_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      headless: isProduction ? true : true,
+      executablePath: executablePath || undefined,
+      headless: true,
     });
 
     this.page = await this.browser.newPage();
