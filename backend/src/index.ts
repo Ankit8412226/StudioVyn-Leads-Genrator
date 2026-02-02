@@ -15,19 +15,8 @@ const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/studiovyn-leads';
 
 // Middleware
-const allowedOrigins = [
-  'http://localhost:3000',
-
-];
-
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -37,17 +26,17 @@ app.use(express.json({ limit: '10mb' }));
 // Connect to MongoDB with retry
 const connectDB = async () => {
   try {
+    console.log('🔌 Attempting to connect to MongoDB...');
     await mongoose.connect(MONGODB_URI, {
       serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 10000,
     });
     console.log('✅ Connected to MongoDB');
   } catch (err: any) {
+    console.error('❌ MongoDB Connection Error:', err.message);
     console.log('⚠️ MongoDB not available. Running in limited mode.');
-    console.log('   To use MongoDB, either:');
-    console.log('   1. Start local MongoDB: brew services start mongodb-community');
-    console.log('   2. Use MongoDB Atlas: Set MONGODB_URI in .env');
-    console.log('');
-    console.log('   For now, scraping will work but leads won\'t persist.');
+    console.log('   Check if MONGODB_URI is correct in Vercel environment variables.');
+    console.log('   Also check if you have whitelisted 0.0.0.0/0 in MongoDB Atlas.');
   }
 
   if (process.env.GEMINI_API_KEY) {
