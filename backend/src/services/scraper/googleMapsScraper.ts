@@ -34,64 +34,56 @@ export class GoogleMapsScraper {
   private page: Page | null = null;
 
   async init(): Promise<void> {
-    console.log('🚀 Starting browser...');
+    const isVercel = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
+    console.log(`🚀 Starting browser (Platform: ${isVercel ? 'Vercel/Serverless' : 'Local'})...`);
 
-    const isProduction = process.env.NODE_ENV === 'production';
+    let executablePath: string | undefined;
+    let browserArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+    ];
+    let headless: any = true;
 
-    // 1. First priority: Environment variable (useful for Docker/VPS)
-    let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '';
-
-    // 2. Second priority: If in production and no path, use @sparticuz/chromium (for Serverless/Vercel)
-    if (!executablePath && isProduction) {
+    if (isVercel) {
+      // Vercel Serverless optimization
       try {
         executablePath = await chromium.executablePath();
+        browserArgs = [...chromium.args, ...browserArgs];
+        // Using 'true' directly to avoid lint issues with older type definitions
+        headless = true;
+        console.log('✅ Resolved @sparticuz/chromium path for Vercel');
       } catch (err) {
-        console.error('⚠️ Could not get @sparticuz/chromium path:', err);
+        console.error('❌ Failed to resolve @sparticuz/chromium:', err);
       }
-    }
-
-    // 3. Third priority: Fallback search (Local Mac & Common Linux paths)
-    if (!executablePath) {
+    } else {
+      // Local development fallback (Mac-specific paths)
       const possiblePaths = [
-        // Mac paths
+        process.env.PUPPETEER_EXECUTABLE_PATH,
         '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
         '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
-        // Linux paths (if not set in ENV)
-        '/usr/bin/google-chrome-stable',
-        '/usr/bin/google-chrome',
-        '/usr/bin/chromium-browser',
-        '/usr/bin/chromium',
-        '/opt/google/chrome/chrome',
-        // Puppeteer cache paths (Mac & Linux)
         `${process.env.HOME}/.cache/puppeteer/chrome/mac_arm-144.0.7559.96/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
-        `${process.env.HOME}/.cache/puppeteer/chrome/mac_arm-127.0.6533.88/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`
       ];
 
       for (const path of possiblePaths) {
         if (path && require('fs').existsSync(path)) {
           executablePath = path;
-          console.log(`✨ Found Chrome at: ${path}`);
+          console.log(`✨ Found local Chrome at: ${path}`);
           break;
         }
       }
     }
 
-    if (!executablePath) {
-      console.warn('⚠️ No Chrome executable found. Puppeteer might fail to launch.');
-    } else {
-      console.log(`📂 Using executable path: ${executablePath}`);
+    if (!executablePath && !isVercel) {
+      console.warn('⚠️ No local Chrome found. Puppeteer might try to use default channel.');
     }
 
     this.browser = await puppeteer.launch({
-      args: isProduction ? chromium.args : [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-      ],
+      args: browserArgs,
       executablePath: executablePath || undefined,
-      // If we couldn't find a specific path locally, use the system's Chrome channel
-      channel: !isProduction && !executablePath ? 'chrome' : undefined,
-      headless: true,
+      headless: headless as any,
+      // CRITICAL: Removed "channel" which was causing the /opt/google/chrome error on Vercel
+      defaultViewport: { width: 1280, height: 800 },
     });
 
     this.page = await this.browser.newPage();
