@@ -47,11 +47,7 @@ const connectDB = async () => {
     console.log('   Also check if you have whitelisted 0.0.0.0/0 in MongoDB Atlas.');
   }
 
-  if (process.env.GEMINI_API_KEY) {
-    console.log('✅ AI connected');
-  } else {
-    console.log('⚠️ AI not connected. Set GEMINI_API_KEY in .env');
-  }
+
 };
 
 connectDB();
