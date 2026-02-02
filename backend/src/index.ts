@@ -13,9 +13,8 @@ const IS_VERCEL = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
 // Use MongoDB Atlas free tier or local MongoDB
 // For local: mongodb://localhost:27017/studiovyn-leads
 // For Atlas: Get your connection string from mongodb.com/cloud/atlas
-const MONGODB_URI =
-  process.env.MONGODB_URI ||
-  (!IS_VERCEL ? 'mongodb://localhost:27017/studiovyn-leads' : '');
+const MONGODB_URI = 'mongodb+srv://ankitpandey841226_db_user:3PLwsbcSGpYf5r9w@cluster0.sneikwd.mongodb.net/studiovyn-leads?retryWrites=true&w=majority&appName=Cluster0'
+
 
 // Middleware
 app.use(cors({
