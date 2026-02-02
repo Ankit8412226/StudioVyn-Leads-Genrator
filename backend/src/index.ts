@@ -8,11 +8,14 @@ import { scrapeGoogleMaps } from './services/scraper/googleMapsScraper';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const IS_VERCEL = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
 
 // Use MongoDB Atlas free tier or local MongoDB
 // For local: mongodb://localhost:27017/studiovyn-leads
 // For Atlas: Get your connection string from mongodb.com/cloud/atlas
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/studiovyn-leads';
+const MONGODB_URI =
+  process.env.MONGODB_URI ||
+  (!IS_VERCEL ? 'mongodb://localhost:27017/studiovyn-leads' : '');
 
 // Middleware
 app.use(cors({
@@ -25,6 +28,11 @@ app.use(express.json({ limit: '10mb' }));
 
 // Connect to MongoDB with retry
 const connectDB = async () => {
+  if (!MONGODB_URI) {
+    console.log('⚠️ MONGODB_URI is not set. Skipping MongoDB connection.');
+    return;
+  }
+
   try {
     console.log('🔌 Attempting to connect to MongoDB...');
     await mongoose.connect(MONGODB_URI, {
@@ -397,10 +405,12 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📍 API: http://localhost:${PORT}/api`);
-});
+// Start server (local/dev only; Vercel runs as serverless function)
+if (!IS_VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`📍 API: http://localhost:${PORT}/api`);
+  });
+}
 
 export default app;
