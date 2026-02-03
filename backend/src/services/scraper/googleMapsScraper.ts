@@ -1,5 +1,4 @@
-import chromium from '@sparticuz/chromium';
-import puppeteer, { Browser, Page } from 'puppeteer-core';
+import puppeteer, { Browser, Page } from 'puppeteer';
 
 export interface ScrapedLead {
   businessName: string;
@@ -15,6 +14,8 @@ export interface ScrapedLead {
   description?: string;
   openingHours?: string[];
   attributes?: string[];
+  lat?: number;
+  lng?: number;
   country?: string;
 }
 
@@ -34,56 +35,15 @@ export class GoogleMapsScraper {
   private page: Page | null = null;
 
   async init(): Promise<void> {
-    const isVercel = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
-    console.log(`🚀 Starting browser (Platform: ${isVercel ? 'Vercel/Serverless' : 'Local'})...`);
-
-    let executablePath: string | undefined;
-    let browserArgs = [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-    ];
-    let headless: any = true;
-
-    if (isVercel) {
-      // Vercel Serverless optimization
-      try {
-        executablePath = await chromium.executablePath();
-        browserArgs = [...chromium.args, ...browserArgs];
-        // Using 'true' directly to avoid lint issues with older type definitions
-        headless = true;
-        console.log('✅ Resolved @sparticuz/chromium path for Vercel');
-      } catch (err) {
-        console.error('❌ Failed to resolve @sparticuz/chromium:', err);
-      }
-    } else {
-      // Local development fallback (Mac-specific paths)
-      const possiblePaths = [
-        process.env.PUPPETEER_EXECUTABLE_PATH,
-        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
-        `${process.env.HOME}/.cache/puppeteer/chrome/mac_arm-144.0.7559.96/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
-      ];
-
-      for (const path of possiblePaths) {
-        if (path && require('fs').existsSync(path)) {
-          executablePath = path;
-          console.log(`✨ Found local Chrome at: ${path}`);
-          break;
-        }
-      }
-    }
-
-    if (!executablePath && !isVercel) {
-      console.warn('⚠️ No local Chrome found. Puppeteer might try to use default channel.');
-    }
-
+    console.log('🚀 Starting browser...');
     this.browser = await puppeteer.launch({
-      args: browserArgs,
-      executablePath: executablePath || undefined,
-      headless: headless as any,
-      // CRITICAL: Removed "channel" which was causing the /opt/google/chrome error on Vercel
-      defaultViewport: { width: 1280, height: 800 },
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--window-size=1920,1080',
+      ],
     });
 
     this.page = await this.browser.newPage();
@@ -142,7 +102,7 @@ export class GoogleMapsScraper {
             const link = currentLinks[i];
 
             // Get name from aria-label before clicking
-            const ariaLabel = await link.evaluate(el => el.getAttribute('aria-label') || '');
+            const ariaLabel = await link.evaluate((el: Element) => el.getAttribute('aria-label') || '');
             console.log(`\n👆 Clicking: ${ariaLabel.substring(0, 40)}...`);
 
             // Click to open details
@@ -205,7 +165,7 @@ export class GoogleMapsScraper {
               const categoryBtn = document.querySelector('button[jsaction*="category"]');
               if (categoryBtn) category = categoryBtn.textContent?.trim() || '';
 
-              // NEW: Price Level
+              // Price Level
               let priceLevel = '';
               const priceEl = document.querySelector('span[aria-label*="Price:"]');
               if (priceEl) priceLevel = priceEl.getAttribute('aria-label') || '';
@@ -214,19 +174,19 @@ export class GoogleMapsScraper {
                 if (priceSpans.length > 0) priceLevel = priceSpans[0].textContent?.trim() || '';
               }
 
-              // NEW: Description
+              // Description
               let description = '';
               const descEl = document.querySelector('div.PYvS2b');
               if (descEl) description = descEl.textContent?.trim() || '';
 
-              // NEW: Attributes (Quick chips)
+              // Attributes (Quick chips)
               let attributes: string[] = [];
               const attrEls = document.querySelectorAll('div.LT7H9b span button');
               attrEls.forEach(el => {
                 if (el.textContent) attributes.push(el.textContent.trim());
               });
 
-              // NEW: Opening Hours Status
+              // Opening Hours Status
               let openingHours: string[] = [];
               const hoursEl = document.querySelector('div.t3970d');
               if (hoursEl) {
@@ -236,6 +196,11 @@ export class GoogleMapsScraper {
 
               return { name, phone, website, address, rating, reviewCount, category, priceLevel, description, attributes, openingHours };
             });
+
+            const urlAfterClick = this.page!.url();
+            const coordMatch = urlAfterClick.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+            const lat = coordMatch ? parseFloat(coordMatch[1]) : undefined;
+            const lng = coordMatch ? parseFloat(coordMatch[2]) : undefined;
 
             processedCount = i + 1;
 
@@ -257,6 +222,8 @@ export class GoogleMapsScraper {
                 description: details.description || undefined,
                 openingHours: details.openingHours.length > 0 ? details.openingHours : undefined,
                 attributes: details.attributes.length > 0 ? details.attributes : undefined,
+                lat,
+                lng,
               });
 
               console.log(`✅ ${leads.length}/${limit}: ${details.name}`);
