@@ -16,10 +16,19 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = 'https://studiovyn-leads-genrator.onrender.com/api';
+const SCRAPER_API_URL = 'http://localhost:5000/api';
 
 async function fetchAPI(endpoint: string, options?: RequestInit) {
   const res = await fetch(`${API_URL}${endpoint}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  return res.json();
+}
+
+async function fetchScraperAPI(endpoint: string, options?: RequestInit) {
+  const res = await fetch(`${SCRAPER_API_URL}${endpoint}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
@@ -99,7 +108,7 @@ export default function Dashboard() {
     setScraperOpen(false);
     setScraping(true);
     try {
-      const res = await fetchAPI('/scraper/google-maps', {
+      const res = await fetchScraperAPI('/scraper/google-maps', {
         method: 'POST',
         body: JSON.stringify(scrapeForm),
       });
