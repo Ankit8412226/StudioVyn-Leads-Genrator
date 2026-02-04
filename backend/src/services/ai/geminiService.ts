@@ -69,13 +69,48 @@ function normalizeJsonLike(text: string): string {
   return cleaned;
 }
 
+function repairCommonJsonIssues(text: string): string {
+  let fixed = text;
+
+  // Remove JS-style comments.
+  fixed = fixed.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+
+  // Drop lines that don't resemble JSON (e.g., stray "& Development"],).
+  const lines = fixed.split(/\r?\n/);
+  fixed = lines
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      if (/^["}\][\],]/.test(trimmed)) return true;
+      if (/^[A-Za-z0-9_]+\s*:/.test(trimmed)) return true;
+      return false;
+    })
+    .join("\n");
+
+  // Add missing commas between properties: ... "value" "nextKey":
+  fixed = fixed.replace(/([}\]0-9"'])\s*(?="[^"]+"\s*:)/g, "$1,");
+
+  // Remove trailing commas again after repair.
+  fixed = fixed.replace(/,\s*([}\]])/g, "$1");
+
+  // Best-effort quote unquoted keys: { foo: "bar" } -> { "foo": "bar" }
+  fixed = fixed.replace(/([,{]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
+
+  return fixed;
+}
+
 /**
  * 🔒 SAFE JSON EXTRACTOR
  * Never trust LLM output directly.
  */
 function extractJSON(text: string): AIAnalysis {
   const raw = normalizeJsonLike(text);
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    const repaired = repairCommonJsonIssues(raw);
+    return JSON.parse(repaired);
+  }
 }
 
 export async function analyzeLead(leadData: {
@@ -235,7 +270,13 @@ Return ONLY raw JSON in this format:
     }
 
     // 🔒 SAFE PARSE (NO CRASH)
-    const analysis = extractJSON(rawText);
+    let analysis: AIAnalysis;
+    try {
+      analysis = extractJSON(rawText);
+    } catch (parseError) {
+      console.error("Raw LLM output (truncated):", rawText.slice(0, 1200));
+      throw parseError;
+    }
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
     // 🌟 PERFECT LOGS

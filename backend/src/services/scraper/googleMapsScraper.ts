@@ -71,12 +71,32 @@ export class GoogleMapsScraper {
         await this.init();
       }
 
+      // Construct a more explicit search query to prevent autocorrection
       const searchQuery = location ? `${query} in ${location}` : query;
       const url = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
 
+      console.log(`🔍 Searching for: "${query}" in "${location || 'default location'}"`);
       console.log(`🔍 Navigating to: ${url}`);
       await this.page!.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
       await delay(3000);
+
+      // Verify we're in the correct location by checking the URL
+      const currentUrl = this.page!.url();
+      console.log(`📍 Current URL after navigation: ${currentUrl}`);
+
+      // Extract location from URL to verify
+      const urlLocationMatch = currentUrl.match(/\/search\/([^/@]+)/);
+      if (urlLocationMatch) {
+        const urlSearchTerm = decodeURIComponent(urlLocationMatch[1]);
+        console.log(`📍 URL search term: "${urlSearchTerm}"`);
+
+        // Check if the location in URL matches what we requested
+        if (location && !urlSearchTerm.toLowerCase().includes(location.toLowerCase())) {
+          console.warn(`⚠️ WARNING: Requested location "${location}" but URL shows "${urlSearchTerm}"`);
+          console.warn(`⚠️ Google Maps may have redirected to a different location!`);
+          console.warn(`⚠️ This might happen due to typos or geolocation-based suggestions.`);
+        }
+      }
 
       // Wait for results
       await this.page!.waitForSelector('div[role="feed"]', { timeout: 10000 }).catch(() => {
@@ -208,13 +228,24 @@ export class GoogleMapsScraper {
             if (details.name && details.name.length > 2 && !seenNames.has(details.name.toLowerCase())) {
               seenNames.add(details.name.toLowerCase());
 
+              // Extract city from address if available
+              let extractedCity = location;
+              if (details.address) {
+                // Address format is usually: "Street, Area, City, State, Country"
+                const addressParts = details.address.split(',').map(p => p.trim());
+                // City is typically the 2nd or 3rd part from the end
+                if (addressParts.length >= 2) {
+                  extractedCity = addressParts[addressParts.length - 3] || addressParts[addressParts.length - 2] || location;
+                }
+              }
+
               leads.push({
                 businessName: details.name,
                 fullName: details.name,
                 phone: details.phone || undefined,
                 website: details.website || undefined,
                 address: details.address || undefined,
-                city: location || undefined,
+                city: extractedCity || undefined,
                 category: details.category || undefined,
                 rating: details.rating || undefined,
                 reviewCount: details.reviewCount || undefined,
@@ -227,6 +258,7 @@ export class GoogleMapsScraper {
               });
 
               console.log(`✅ ${leads.length}/${limit}: ${details.name}`);
+              console.log(`   📍 City: ${extractedCity || 'Unknown'}`);
               console.log(`   📞 Phone: ${details.phone || 'Not found'}`);
               console.log(`   ⭐ Rating: ${details.rating || 'N/A'} (${details.reviewCount} reviews)`);
               console.log(`   🌐 Website: ${details.website ? 'Yes' : 'No'}`);
