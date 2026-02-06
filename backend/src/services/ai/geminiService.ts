@@ -34,37 +34,43 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * 🔒 ROBUST JSON EXTRACTION
+ * Handles markdown code blocks, invisible characters, and malformed JSON
+ */
 function normalizeJsonLike(text: string): string {
-  let cleaned = text.trim();
+  let cleaned = text;
 
-  // Strip code fences if present.
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```[a-zA-Z]*\s*/, "").replace(/\s*```$/, "");
-  }
+  // Remove BOM and other invisible characters at the start
+  cleaned = cleaned.replace(/^\uFEFF/, '');
+  cleaned = cleaned.replace(/^[\x00-\x1F\x7F]+/, '');
+
+  // Strip ALL variations of code fences (handles ```json, ```JSON, just ```, etc.)
+  cleaned = cleaned.replace(/```(?:json|JSON|js|javascript)?\s*\n?/gi, '');
+  cleaned = cleaned.replace(/\n?```\s*$/g, '');
+  cleaned = cleaned.replace(/^```[a-zA-Z]*\s*/g, '');
+  cleaned = cleaned.replace(/\s*```$/g, '');
+
+  cleaned = cleaned.trim();
 
   // Find the first JSON object.
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
 
   if (start === -1 || end === -1 || end <= start) {
-    throw new Error('No valid JSON found in LLM response');
+    throw new Error('No complete JSON block found in LLM response');
   }
 
   cleaned = cleaned.slice(start, end + 1);
 
-  // Normalize smart quotes.
-  cleaned = cleaned
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'");
+  // Only normalize smart/curly quotes to straight quotes (NOT single quotes inside strings)
+  // Curly double quotes → straight double quotes
+  cleaned = cleaned.replace(/[""]/g, '"');
+  // Curly single quotes → straight single quotes (keep as single quotes, don't convert to double)
+  cleaned = cleaned.replace(/['']/g, "'");
 
   // Remove trailing commas before } or ].
   cleaned = cleaned.replace(/,\s*([}\]])/g, "$1");
-
-  // Replace single-quoted strings with double quotes (best-effort).
-  cleaned = cleaned.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_, inner) => {
-    const escaped = inner.replace(/"/g, '\\"');
-    return `"${escaped}"`;
-  });
 
   return cleaned;
 }
@@ -75,22 +81,7 @@ function repairCommonJsonIssues(text: string): string {
   // Remove JS-style comments.
   fixed = fixed.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
-  // Drop lines that don't resemble JSON (e.g., stray "& Development"],).
-  const lines = fixed.split(/\r?\n/);
-  fixed = lines
-    .filter((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return true;
-      if (/^["}\][\],]/.test(trimmed)) return true;
-      if (/^[A-Za-z0-9_]+\s*:/.test(trimmed)) return true;
-      return false;
-    })
-    .join("\n");
-
-  // Add missing commas between properties: ... "value" "nextKey":
-  fixed = fixed.replace(/([}\]0-9"'])\s*(?="[^"]+"\s*:)/g, "$1,");
-
-  // Remove trailing commas again after repair.
+  // Remove trailing commas before } or ].
   fixed = fixed.replace(/,\s*([}\]])/g, "$1");
 
   // Best-effort quote unquoted keys: { foo: "bar" } -> { "foo": "bar" }
@@ -99,16 +90,26 @@ function repairCommonJsonIssues(text: string): string {
   return fixed;
 }
 
+
 /**
  * 🔒 SAFE JSON EXTRACTOR
  * Never trust LLM output directly.
  */
 function extractJSON(text: string): AIAnalysis {
+  // Log the first 100 chars to help debug
+  console.log("🔍 Extracting JSON from raw text (first 100 chars):", text.slice(0, 100).replace(/\n/g, '\\n'));
+
   const raw = normalizeJsonLike(text);
+
+  // Log the cleaned JSON for debugging
+  console.log("🔧 Cleaned JSON (first 200 chars):", raw.slice(0, 200).replace(/\n/g, '\\n'));
+
   try {
     return JSON.parse(raw);
   } catch (error) {
+    console.log("⚠️ Initial parse failed, attempting repair...");
     const repaired = repairCommonJsonIssues(raw);
+    console.log("🔧 Repaired JSON (first 200 chars):", repaired.slice(0, 200).replace(/\n/g, '\\n'));
     return JSON.parse(repaired);
   }
 }
@@ -159,7 +160,7 @@ export async function analyzeLead(leadData: {
         : ['Website Development', 'SEO', 'Google Leads CRM'],
       firstMessageHook: hasWebsite
         ? 'We help local businesses convert more visitors into customers.'
-        : 'Loved your Google reviews—noticed you don’t have a website yet.',
+        : "Loved your Google reviews—noticed you don't have a website yet.",
       followUpMessage: 'Checking in to see if you received my previous message regarding your business growth.',
       conversionProbability: isHot ? 40 : 15,
       painPoints: hasWebsite ? ['Outdated design', 'Slow loading'] : ['No online presence', 'Missing local leads'],
@@ -187,15 +188,16 @@ Strategy Rules:
 2. AUTHORITY LOSS: If they are a "Luxury" ($$$) business but have a cheap or no website, it's a "Brand Emergency".
 3. CONVERSION LOSS: If they have no booking/ordering system, they are "Leaking Revenue".
 
-Return ONLY raw JSON in this format:
+IMPORTANT: Return ONLY a raw JSON object. Do NOT wrap in markdown code blocks. Do NOT add any text before or after the JSON.
+
 {
-  "score": 0-100, (Agency priority score)
+  "score": 0-100,
   "leadType": "hot" | "warm" | "cold",
   "reason": "Expert tactical reason why the agency owner should care about this lead",
   "whatToSell": ["Specific Agency Package 1", "Specific Agency Package 2"],
   "firstMessageHook": "A direct, high-converting B2B WhatsApp/Email opener for the owner",
   "followUpMessage": "A professional but persistent agency follow-up script",
-  "conversionProbability": 0-100, (Chance of closing this lead)
+  "conversionProbability": 0-100,
   "painPoints": ["Business owner's biggest fears or missing revenue sources"],
   "idealSolution": "The exact 'Grand Slam' offer that would be impossible for them to refuse"
 }
@@ -231,7 +233,7 @@ Return ONLY raw JSON in this format:
           messages: [
             {
               role: "system",
-              content: "You are an assistant that outputs only valid JSON objects without code fences or extra text."
+              content: "You are an assistant that outputs only valid JSON objects. Never use markdown code blocks. Never add any text before or after the JSON. Output pure JSON only."
             },
             {
               role: "user",
@@ -318,7 +320,7 @@ Return ONLY raw JSON in this format:
         : ['Website Development', 'SEO', 'Google Leads CRM'],
       firstMessageHook: hasWebsite
         ? 'We help local businesses convert more visitors into customers.'
-        : 'Loved your Google reviews—noticed you don’t have a website yet.',
+        : "Loved your Google reviews—noticed you don't have a website yet.",
       followUpMessage: 'Checking in to see if you received my previous message regarding your business growth.',
       conversionProbability: isHot ? 40 : 15,
       painPoints: hasWebsite ? ['Outdated design', 'Slow loading'] : ['No online presence', 'Missing local leads'],

@@ -228,6 +228,33 @@ export class GoogleMapsScraper {
             if (details.name && details.name.length > 2 && !seenNames.has(details.name.toLowerCase())) {
               seenNames.add(details.name.toLowerCase());
 
+              // 🎯 QUALITY FILTER: Only include leads worth pursuing
+              const hasPhone = !!details.phone;
+              const hasGoodRating = details.rating && details.rating >= 3.5;
+              const hasReviews = details.reviewCount && details.reviewCount >= 5;
+              const noWebsite = !details.website;
+
+              // Skip leads without phone (can't contact them)
+              if (!hasPhone) {
+                console.log(`⏭️ Skipping ${details.name}: No phone number`);
+                continue;
+              }
+
+              // Skip low-quality leads: low rating AND has website (no opportunity)
+              if (details.rating && details.rating < 3.5 && details.website) {
+                console.log(`⏭️ Skipping ${details.name}: Low rating (${details.rating}) with existing website`);
+                continue;
+              }
+
+              // Calculate lead quality score for logging
+              let qualityIndicators: string[] = [];
+              if (hasGoodRating) qualityIndicators.push(`⭐${details.rating}`);
+              if (hasReviews) qualityIndicators.push(`📝${details.reviewCount} reviews`);
+              if (noWebsite) qualityIndicators.push('🎯 No website');
+              if (details.rating && details.rating >= 4.5 && details.reviewCount && details.reviewCount >= 50) {
+                qualityIndicators.push('🔥 Gold Mine!');
+              }
+
               // Extract city from address if available
               let extractedCity = location;
               if (details.address) {
@@ -262,6 +289,9 @@ export class GoogleMapsScraper {
               console.log(`   📞 Phone: ${details.phone || 'Not found'}`);
               console.log(`   ⭐ Rating: ${details.rating || 'N/A'} (${details.reviewCount} reviews)`);
               console.log(`   🌐 Website: ${details.website ? 'Yes' : 'No'}`);
+              if (qualityIndicators.length > 0) {
+                console.log(`   💎 Quality: ${qualityIndicators.join(' | ')}`);
+              }
             }
 
             // Go back to list - click outside or scroll

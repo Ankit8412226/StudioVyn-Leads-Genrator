@@ -216,6 +216,8 @@ app.post('/api/scraper/google-maps', async (req, res) => {
     let hotLeadCount = 0;
 
     if (mongoose.connection.readyState === 1) {
+      let skippedCount = 0;
+
       for (const scraped of scrapedLeads) {
         try {
           // Check for duplicates by phone or business name
@@ -235,6 +237,18 @@ app.post('/api/scraper/google-maps', async (req, res) => {
           console.log(`🤖 Analyzing lead with Gemini: ${scraped.businessName}...`);
           const aiAnalysis = await analyzeLead(scraped);
 
+          // 🎯 POST-AI QUALITY FILTER: Only save high-quality leads
+          const isWorthSaving =
+            aiAnalysis.leadType === 'hot' ||
+            aiAnalysis.score >= 60 ||
+            (aiAnalysis.conversionProbability >= 50);
+
+          if (!isWorthSaving) {
+            console.log(`⏭️ Skipping ${scraped.businessName}: Low AI score (${aiAnalysis.score}) and ${aiAnalysis.leadType} lead type`);
+            skippedCount++;
+            continue;
+          }
+
           const lead = new Lead({
             fullName: scraped.businessName,
             businessName: scraped.businessName,
@@ -252,8 +266,8 @@ app.post('/api/scraper/google-maps', async (req, res) => {
             country: scraped.address?.split(',').pop()?.trim() || 'India', // Try to get the last part of address
             source: 'google_maps',
             status: 'new',
-            isHotLead: aiAnalysis.score >= 80 || !!(scraped.rating && scraped.rating >= 4.0 && scraped.phone),
-            priority: aiAnalysis.leadType === 'hot' ? 'high' : (scraped.rating && scraped.rating >= 4.0 ? 'high' : 'medium'),
+            isHotLead: aiAnalysis.leadType === 'hot' || aiAnalysis.score >= 80,
+            priority: aiAnalysis.leadType === 'hot' ? 'high' : (aiAnalysis.score >= 70 ? 'high' : 'medium'),
 
             // AI Data
             aiScore: aiAnalysis.score,
@@ -271,12 +285,19 @@ app.post('/api/scraper/google-maps', async (req, res) => {
           await lead.save();
           savedCount++;
           if (lead.isHotLead) hotLeadCount++;
+
+          // Log quality summary
+          const qualityEmoji = aiAnalysis.leadType === 'hot' ? '🔥' : aiAnalysis.leadType === 'warm' ? '☀️' : '❄️';
+          console.log(`💾 Saved ${qualityEmoji} ${scraped.businessName} (Score: ${aiAnalysis.score}, Conv: ${aiAnalysis.conversionProbability}%)`);
+
         } catch (leadError: any) {
           console.error(`❌ Error processing lead "${scraped.businessName}":`, leadError.message);
           // Still try to save basic data if AI/full-save failed?
           // Actually, let's just log and continue to the next one to be safe.
         }
       }
+
+      console.log(`\n📊 Quality Summary: ${savedCount} saved, ${skippedCount} skipped (low quality), ${duplicateCount} duplicates`);
     } else {
       // Count hot leads even without saving
       hotLeadCount = scrapedLeads.filter(l => l.rating && l.rating >= 4.0 && l.phone).length;
