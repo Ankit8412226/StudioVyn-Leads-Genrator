@@ -4,6 +4,7 @@ export interface ScrapedLead {
   businessName: string;
   fullName: string;
   phone?: string;
+  email?: string;
   website?: string;
   address?: string;
   city?: string;
@@ -17,6 +18,7 @@ export interface ScrapedLead {
   lat?: number;
   lng?: number;
   country?: string;
+  source?: string;
 }
 
 export interface ScraperConfig {
@@ -240,19 +242,27 @@ export class GoogleMapsScraper {
                 continue;
               }
 
-              // Skip low-quality leads: low rating AND has website (no opportunity)
-              if (details.rating && details.rating < 3.5 && details.website) {
-                console.log(`⏭️ Skipping ${details.name}: Low rating (${details.rating}) with existing website`);
+              // 🔥 ONLY KEEP LEADS WITHOUT WEBSITES - These are GOLD for selling web services!
+              if (details.website) {
+                console.log(`⏭️ Skipping ${details.name}: Already has website`);
+                continue;
+              }
+
+              // Skip leads with very low rating (hard to work with)
+              if (details.rating && details.rating < 3.0) {
+                console.log(`⏭️ Skipping ${details.name}: Very low rating (${details.rating})`);
                 continue;
               }
 
               // Calculate lead quality score for logging
               let qualityIndicators: string[] = [];
+              qualityIndicators.push('🎯 No website!'); // All leads now have no website
               if (hasGoodRating) qualityIndicators.push(`⭐${details.rating}`);
               if (hasReviews) qualityIndicators.push(`📝${details.reviewCount} reviews`);
-              if (noWebsite) qualityIndicators.push('🎯 No website');
               if (details.rating && details.rating >= 4.5 && details.reviewCount && details.reviewCount >= 50) {
-                qualityIndicators.push('🔥 Gold Mine!');
+                qualityIndicators.push('🔥 GOLD MINE!');
+              } else if (details.rating && details.rating >= 4.0 && details.reviewCount && details.reviewCount >= 20) {
+                qualityIndicators.push('💰 High Value!');
               }
 
               // Extract city from address if available

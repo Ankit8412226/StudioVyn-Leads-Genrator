@@ -3,8 +3,10 @@ import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
 import { Lead } from './models/Lead';
-import { analyzeLead } from './services/ai/geminiService';
 import { scrapeGoogleMaps } from './services/scraper/googleMapsScraper';
+import { IndiaMartLead, scrapeIndiaMART } from './services/scraper/indiamartScraper';
+import { JustDialLead, scrapeJustDial } from './services/scraper/justDialScraper';
+import { scrapeYelp, YelpLead } from './services/scraper/yelpScraper';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -168,6 +170,17 @@ app.delete('/api/leads/:id', async (req, res) => {
   }
 });
 
+// Delete ALL leads
+app.delete('/api/leads', async (req, res) => {
+  try {
+    const result = await Lead.deleteMany({});
+    console.log(`🗑️ Deleted ${result.deletedCount} leads`);
+    res.json({ success: true, message: `Deleted ${result.deletedCount} leads` });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Bulk update leads
 app.put('/api/leads/bulk/update', async (req, res) => {
   try {
@@ -216,8 +229,6 @@ app.post('/api/scraper/google-maps', async (req, res) => {
     let hotLeadCount = 0;
 
     if (mongoose.connection.readyState === 1) {
-      let skippedCount = 0;
-
       for (const scraped of scrapedLeads) {
         try {
           // Check for duplicates by phone or business name
@@ -233,21 +244,8 @@ app.post('/api/scraper/google-maps', async (req, res) => {
             continue;
           }
 
-          // Perform AI Analysis for intelligent qualification
-          console.log(`🤖 Analyzing lead with Gemini: ${scraped.businessName}...`);
-          const aiAnalysis = await analyzeLead(scraped);
-
-          // 🎯 POST-AI QUALITY FILTER: Only save high-quality leads
-          const isWorthSaving =
-            aiAnalysis.leadType === 'hot' ||
-            aiAnalysis.score >= 60 ||
-            (aiAnalysis.conversionProbability >= 50);
-
-          if (!isWorthSaving) {
-            console.log(`⏭️ Skipping ${scraped.businessName}: Low AI score (${aiAnalysis.score}) and ${aiAnalysis.leadType} lead type`);
-            skippedCount++;
-            continue;
-          }
+          // Determine if it's a hot lead based on rating and no website
+          const isHot = !!(scraped.rating && scraped.rating >= 4.0 && !scraped.website);
 
           const lead = new Lead({
             fullName: scraped.businessName,
@@ -263,43 +261,26 @@ app.post('/api/scraper/google-maps', async (req, res) => {
             description: scraped.description,
             openingHours: scraped.openingHours,
             attributes: scraped.attributes,
-            country: scraped.address?.split(',').pop()?.trim() || 'India', // Try to get the last part of address
+            country: scraped.address?.split(',').pop()?.trim() || 'India',
             source: 'google_maps',
             status: 'new',
-            isHotLead: aiAnalysis.leadType === 'hot' || aiAnalysis.score >= 80,
-            priority: aiAnalysis.leadType === 'hot' ? 'high' : (aiAnalysis.score >= 70 ? 'high' : 'medium'),
-
-            // AI Data
-            aiScore: aiAnalysis.score,
-            aiPotential: aiAnalysis.leadType,
-            aiJustification: aiAnalysis.reason,
-            aiRecommendedServices: aiAnalysis.whatToSell,
-            aiOutreachAngle: aiAnalysis.firstMessageHook,
-            aiFollowUpMessage: aiAnalysis.followUpMessage,
-            aiConversionProbability: aiAnalysis.conversionProbability,
-            aiPainPoints: aiAnalysis.painPoints,
-            aiIdealSolution: aiAnalysis.idealSolution,
-            notes: `AI Analysis: ${aiAnalysis.reason}\nRecommended: ${aiAnalysis.whatToSell.join(', ')}`,
+            isHotLead: isHot,
+            priority: isHot ? 'high' : 'medium',
           });
 
           await lead.save();
           savedCount++;
           if (lead.isHotLead) hotLeadCount++;
 
-          // Log quality summary
-          const qualityEmoji = aiAnalysis.leadType === 'hot' ? '🔥' : aiAnalysis.leadType === 'warm' ? '☀️' : '❄️';
-          console.log(`💾 Saved ${qualityEmoji} ${scraped.businessName} (Score: ${aiAnalysis.score}, Conv: ${aiAnalysis.conversionProbability}%)`);
+          console.log(`💾 Saved: ${scraped.businessName} (${scraped.rating}⭐) from Google Maps`);
 
         } catch (leadError: any) {
-          console.error(`❌ Error processing lead "${scraped.businessName}":`, leadError.message);
-          // Still try to save basic data if AI/full-save failed?
-          // Actually, let's just log and continue to the next one to be safe.
+          console.error(`❌ Error saving "${scraped.businessName}":`, leadError.message);
         }
       }
 
-      console.log(`\n📊 Quality Summary: ${savedCount} saved, ${skippedCount} skipped (low quality), ${duplicateCount} duplicates`);
+      console.log(`\n📊 Summary: ${savedCount} saved, ${duplicateCount} duplicates, ${hotLeadCount} hot leads`);
     } else {
-      // Count hot leads even without saving
       hotLeadCount = scrapedLeads.filter(l => l.rating && l.rating >= 4.0 && l.phone).length;
     }
 
@@ -315,6 +296,219 @@ app.post('/api/scraper/google-maps', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Scraping error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// MULTI-SOURCE SCRAPER (Google Maps + JustDial + IndiaMART + Yelp)
+// ============================================
+
+app.post('/api/scraper/all-sources', async (req, res) => {
+  try {
+    const { query, location, limit = 30 } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ success: false, error: 'Query is required' });
+    }
+
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🚀 MULTI-SOURCE SCRAPING: "${query}" in "${location || 'India'}"`);
+    console.log(`${'='.repeat(60)}\n`);
+
+    // Scrape from all sources in parallel
+    const [googleLeads, justDialLeads, indiaMartLeads, yelpLeads] = await Promise.allSettled([
+      scrapeGoogleMaps({ query, location, limit: Math.ceil(limit / 4) }),
+      scrapeJustDial({ query, city: location || 'Mumbai', limit: Math.ceil(limit / 4) }),
+      scrapeIndiaMART({ query, city: location, limit: Math.ceil(limit / 4) }),
+      scrapeYelp({ query, location: location || 'New York, NY', limit: Math.ceil(limit / 4) }),
+    ]);
+
+    // Combine all leads
+    type CombinedLead = {
+      businessName: string;
+      fullName: string;
+      phone?: string;
+      email?: string;
+      website?: string;
+      address?: string;
+      city?: string;
+      rating?: number;
+      reviewCount?: number;
+      category?: string;
+      source: string;
+    };
+
+    const allLeads: CombinedLead[] = [];
+
+    // Add Google Maps leads
+    if (googleLeads.status === 'fulfilled') {
+      googleLeads.value.forEach(lead => {
+        allLeads.push({ ...lead, source: 'google_maps' });
+      });
+      console.log(`✅ Google Maps: ${googleLeads.value.length} leads`);
+    } else {
+      console.log(`❌ Google Maps failed: ${googleLeads.reason}`);
+    }
+
+    // Add JustDial leads
+    if (justDialLeads.status === 'fulfilled') {
+      justDialLeads.value.forEach((lead: JustDialLead) => {
+        allLeads.push({
+          businessName: lead.businessName,
+          fullName: lead.fullName,
+          phone: lead.phone,
+          email: lead.email,
+          address: lead.address,
+          city: lead.city,
+          rating: lead.rating,
+          reviewCount: lead.reviewCount,
+          category: lead.category,
+          source: 'justdial',
+        });
+      });
+      console.log(`✅ JustDial: ${justDialLeads.value.length} leads`);
+    } else {
+      console.log(`❌ JustDial failed: ${justDialLeads.reason}`);
+    }
+
+    // Add IndiaMART leads
+    if (indiaMartLeads.status === 'fulfilled') {
+      indiaMartLeads.value.forEach((lead: IndiaMartLead) => {
+        allLeads.push({
+          businessName: lead.businessName,
+          fullName: lead.fullName,
+          phone: lead.phone,
+          email: lead.email,
+          address: lead.address,
+          city: lead.city,
+          category: lead.category,
+          source: 'indiamart',
+        });
+      });
+      console.log(`✅ IndiaMART: ${indiaMartLeads.value.length} leads`);
+    } else {
+      console.log(`❌ IndiaMART failed: ${indiaMartLeads.reason}`);
+    }
+
+    // Add Yelp leads (International - US, UK, Canada, UAE)
+    if (yelpLeads.status === 'fulfilled') {
+      yelpLeads.value.forEach((lead: YelpLead) => {
+        allLeads.push({
+          businessName: lead.businessName,
+          fullName: lead.fullName,
+          phone: lead.phone,
+          email: lead.email,
+          address: lead.address,
+          city: lead.city,
+          rating: lead.rating,
+          reviewCount: lead.reviewCount,
+          category: lead.category,
+          source: 'yelp',
+        });
+      });
+      console.log(`✅ Yelp (International): ${yelpLeads.value.length} leads`);
+    } else {
+      console.log(`❌ Yelp failed: ${yelpLeads.reason}`);
+    }
+
+    console.log(`\n📊 Total combined leads: ${allLeads.length}`);
+
+    // Deduplicate by phone or business name
+    const seenPhones = new Set<string>();
+    const seenNames = new Set<string>();
+    const uniqueLeads = allLeads.filter(lead => {
+      const phoneKey = lead.phone?.replace(/\D/g, '') || '';
+      const nameKey = lead.businessName.toLowerCase();
+
+      if (phoneKey && seenPhones.has(phoneKey)) return false;
+      if (seenNames.has(nameKey)) return false;
+
+      if (phoneKey) seenPhones.add(phoneKey);
+      seenNames.add(nameKey);
+      return true;
+    });
+
+    console.log(`📊 After deduplication: ${uniqueLeads.length} unique leads`);
+
+    // Save to database
+    let savedCount = 0;
+    let duplicateCount = 0;
+    let hotLeadCount = 0;
+
+    if (mongoose.connection.readyState === 1) {
+      for (const scraped of uniqueLeads) {
+        try {
+          // Check for existing
+          const existing = await Lead.findOne({
+            $or: [
+              ...(scraped.phone ? [{ phone: scraped.phone }] : []),
+              { businessName: scraped.businessName },
+            ],
+          });
+
+          if (existing) {
+            duplicateCount++;
+            continue;
+          }
+
+          // Determine hot lead based on rating
+          const isHot = !!(scraped.rating && scraped.rating >= 4.0);
+
+          const lead = new Lead({
+            fullName: scraped.businessName,
+            businessName: scraped.businessName,
+            phone: scraped.phone,
+            email: scraped.email,
+            address: scraped.address,
+            city: scraped.city || location,
+            category: scraped.category,
+            rating: scraped.rating,
+            reviewCount: scraped.reviewCount,
+            source: scraped.source,
+            status: 'new',
+            isHotLead: isHot,
+            priority: isHot ? 'high' : 'medium',
+          });
+
+          await lead.save();
+          savedCount++;
+          if (lead.isHotLead) hotLeadCount++;
+
+          console.log(`💾 Saved: ${scraped.businessName} from ${scraped.source}`);
+
+        } catch (err: any) {
+          console.error(`❌ Error: ${scraped.businessName}: ${err.message}`);
+        }
+      }
+
+      console.log(`\n${'='.repeat(60)}`);
+      console.log(`📊 FINAL SUMMARY`);
+      console.log(`${'='.repeat(60)}`);
+      console.log(`   ✅ Saved: ${savedCount}`);
+      console.log(`   🔥 Hot Leads: ${hotLeadCount}`);
+      console.log(`   📋 Duplicates: ${duplicateCount}`);
+      console.log(`${'='.repeat(60)}\n`);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        sources: {
+          googleMaps: googleLeads.status === 'fulfilled' ? googleLeads.value.length : 0,
+          justDial: justDialLeads.status === 'fulfilled' ? justDialLeads.value.length : 0,
+          indiaMART: indiaMartLeads.status === 'fulfilled' ? indiaMartLeads.value.length : 0,
+        },
+        totalScraped: allLeads.length,
+        uniqueLeads: uniqueLeads.length,
+        saved: savedCount,
+        hotLeads: hotLeadCount,
+        duplicates: duplicateCount,
+        leads: uniqueLeads,
+      },
+    });
+  } catch (error: any) {
+    console.error('Multi-source scraping error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

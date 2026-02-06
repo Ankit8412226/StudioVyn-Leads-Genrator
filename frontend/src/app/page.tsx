@@ -3,7 +3,6 @@
 import {
   Clock,
   Flame,
-  Globe,
   MapPin,
   MessageSquare,
   Phone,
@@ -12,7 +11,7 @@ import {
   Star,
   Trophy,
   Users,
-  X,
+  X
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -84,7 +83,7 @@ export default function Dashboard() {
   const [scraperOpen, setScraperOpen] = useState(false);
   const [filter, setFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [scrapeForm, setScrapeForm] = useState({ query: '', location: '', limit: 30 });
+  const [scrapeForm, setScrapeForm] = useState({ query: '', location: '', limit: 30, source: 'all' as 'google' | 'all' });
 
   const fetchData = async () => {
     setLoading(true);
@@ -108,12 +107,39 @@ export default function Dashboard() {
     setScraperOpen(false);
     setScraping(true);
     try {
-      const res = await fetchScraperAPI('/scraper/google-maps', {
+      // Choose endpoint based on source selection
+      const endpoint = scrapeForm.source === 'all' ? '/scraper/all-sources' : '/scraper/google-maps';
+
+      const res = await fetchScraperAPI(endpoint, {
         method: 'POST',
-        body: JSON.stringify(scrapeForm),
+        body: JSON.stringify({
+          query: scrapeForm.query,
+          location: scrapeForm.location,
+          limit: scrapeForm.limit,
+        }),
       });
+
       if (res.success) {
-        alert(`✅ Scraped ${res.data.scraped} leads!\n🔥 Hot Leads: ${res.data.hotLeads}\n💾 Saved: ${res.data.saved}`);
+        if (scrapeForm.source === 'all') {
+          // Multi-source response
+          alert(
+            `✅ Multi-Source Scraping Complete!\n\n` +
+            `📊 Sources:\n` +
+            `   • Google Maps: ${res.data.sources?.googleMaps || 0} leads\n` +
+            `   • JustDial: ${res.data.sources?.justDial || 0} leads\n` +
+            `   • IndiaMART: ${res.data.sources?.indiaMART || 0} leads\n` +
+            `   • Yelp (Intl): ${res.data.sources?.yelp || 0} leads\n\n` +
+            `📈 Results:\n` +
+            `   • Total Scraped: ${res.data.totalScraped || 0}\n` +
+            `   • Unique Leads: ${res.data.uniqueLeads || 0}\n` +
+            `   • 🔥 Hot Leads: ${res.data.hotLeads || 0}\n` +
+            `   • 💾 Saved: ${res.data.saved || 0}\n` +
+            `   • 📋 Duplicates: ${res.data.duplicates || 0}`
+          );
+        } else {
+          // Google Maps only response
+          alert(`✅ Scraped ${res.data.scraped} leads!\n🔥 Hot Leads: ${res.data.hotLeads}\n💾 Saved: ${res.data.saved}`);
+        }
         fetchData();
       } else {
         alert(`❌ Error: ${res.error}`);
@@ -234,170 +260,118 @@ export default function Dashboard() {
 
         {/* Leads Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
-          {filteredLeads.map((lead) => (
-            <div key={lead._id} style={{ background: lead.isHotLead ? 'linear-gradient(135deg, #fef2f2 0%, #fff 100%)' : 'white', borderRadius: 16, padding: 24, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: lead.isHotLead ? '2px solid #fecaca' : '1px solid #e2e8f0', transition: 'transform 0.2s, box-shadow 0.2s' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#0f172a' }}>{lead.businessName || lead.fullName}</h3>
-                    {lead.isHotLead && <span style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600 }}><Flame style={{ width: 12, height: 12 }} /> Hot</span>}
-                    {lead.aiPotential === 'hot' && <span style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#f0f9ff', color: '#0369a1', fontSize: 12, fontWeight: 600 }}>🤖 AI High</span>}
-                  </div>
-                  {lead.category && <p style={{ margin: '4px 0 0', fontSize: 14, color: '#64748b' }}>{lead.category}</p>}
-                </div>
-                <select
-                  value={lead.status}
-                  onChange={(e) => handleStatusChange(lead._id, e.target.value)}
-                  style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, fontWeight: 500, background: lead.status === 'won' ? '#dcfce7' : lead.status === 'contacted' ? '#dbeafe' : '#f1f5f9', color: lead.status === 'won' ? '#16a34a' : lead.status === 'contacted' ? '#2563eb' : '#475569', cursor: 'pointer' }}
-                >
-                  <option value="new">New</option>
-                  <option value="contacted">Contacted</option>
-                  <option value="interested">Interested</option>
-                  <option value="qualified">Qualified</option>
-                  <option value="won">Won</option>
-                  <option value="lost">Lost</option>
-                </select>
-              </div>
+          {filteredLeads.map((lead) => {
+            // Source badge styling
+            const getSourceStyle = (source: string) => {
+              switch (source) {
+                case 'google_maps':
+                  return { bg: '#dbeafe', color: '#2563eb', icon: '🗺️', label: 'Google Maps' };
+                case 'justdial':
+                  return { bg: '#fef3c7', color: '#d97706', icon: '📞', label: 'JustDial' };
+                case 'indiamart':
+                  return { bg: '#fce7f3', color: '#db2777', icon: '🏭', label: 'IndiaMART' };
+                case 'yelp':
+                  return { bg: '#ffedd5', color: '#ea580c', icon: '🌟', label: 'Yelp (Intl)' };
+                default:
+                  return { bg: '#f1f5f9', color: '#64748b', icon: '🌐', label: source };
+              }
+            };
+            const sourceStyle = getSourceStyle(lead.source);
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-                {lead.rating && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 14, color: '#f59e0b' }}>
-                    <Star style={{ width: 16, height: 16, fill: '#fbbf24' }} /> {lead.rating} ({lead.reviewCount || 0})
+            return (
+              <div key={lead._id} style={{ background: lead.isHotLead ? 'linear-gradient(135deg, #fef2f2 0%, #fff 100%)' : 'white', borderRadius: 16, padding: 24, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: lead.isHotLead ? '2px solid #fecaca' : '1px solid #e2e8f0', transition: 'transform 0.2s, box-shadow 0.2s' }}>
+                {/* Source Badge - Top */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 12px',
+                    borderRadius: 20,
+                    background: sourceStyle.bg,
+                    color: sourceStyle.color,
+                    fontSize: 12,
+                    fontWeight: 600
+                  }}>
+                    {sourceStyle.icon} {sourceStyle.label}
                   </span>
-                )}
-                {lead.city && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 14, color: '#64748b' }}><MapPin style={{ width: 16, height: 16 }} /> {lead.city}</span>}
-                {lead.priceLevel && <span style={{ padding: '2px 8px', background: '#fef3c7', color: '#92400e', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>{lead.priceLevel}</span>}
-                {lead.openingHours && lead.openingHours.length > 0 && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, padding: '2px 8px', background: '#f1f5f9', color: '#475569', borderRadius: 6 }}>
-                    <Clock style={{ width: 14, height: 14 }} /> {lead.openingHours[0].split('⋅')[0]}
-                  </span>
-                )}
-              </div>
-
-              {lead.attributes && lead.attributes.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
-                  {lead.attributes.slice(0, 4).map(attr => (
-                    <span key={attr} style={{ fontSize: 11, color: '#10b981', background: '#ecfdf5', padding: '2px 8px', borderRadius: 4, fontWeight: 500 }}>
-                      ✓ {attr}
+                  {lead.isHotLead && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600 }}>
+                      <Flame style={{ width: 12, height: 12 }} /> Hot Lead
                     </span>
-                  ))}
+                  )}
                 </div>
-              )}
 
-              {lead.description && (
-                <p style={{ margin: '0 0 16px', fontSize: 13, color: '#475569', fontStyle: 'italic', lineHeight: 1.4, borderLeft: '3px solid #e2e8f0', paddingLeft: 12 }}>
-                  "{lead.description}"
-                </p>
-              )}
-
-              <div style={{ marginBottom: 20 }}>
-                {lead.aiScore && (
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        <div>
-                          <span style={{ display: 'block', fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Match Score</span>
-                          <span style={{ fontSize: 18, fontWeight: 800, color: lead.aiScore >= 80 ? '#16a34a' : '#2563eb' }}>{lead.aiScore}%</span>
-                        </div>
-                        {lead.aiConversionProbability && (
-                          <div>
-                            <span style={{ display: 'block', fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Closing Prob.</span>
-                            <span style={{ fontSize: 18, fontWeight: 800, color: '#7c3aed' }}>{lead.aiConversionProbability}%</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div style={{ width: '100%', height: 6, background: '#f1f5f9', borderRadius: 3, overflow: 'hidden' }}>
-                      <div style={{ width: `${lead.aiScore}%`, height: '100%', background: lead.aiScore >= 80 ? 'linear-gradient(90deg, #10b981, #34d399)' : 'linear-gradient(90deg, #6366f1, #818cf8)' }} />
-                    </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#0f172a' }}>{lead.businessName || lead.fullName}</h3>
+                    {lead.category && <p style={{ margin: '4px 0 0', fontSize: 14, color: '#64748b' }}>{lead.category}</p>}
                   </div>
-                )}
-              </div>
+                  <select
+                    value={lead.status}
+                    onChange={(e) => handleStatusChange(lead._id, e.target.value)}
+                    style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, fontWeight: 500, background: lead.status === 'won' ? '#dcfce7' : lead.status === 'contacted' ? '#dbeafe' : '#f1f5f9', color: lead.status === 'won' ? '#16a34a' : lead.status === 'contacted' ? '#2563eb' : '#475569', cursor: 'pointer' }}
+                  >
+                    <option value="new">New</option>
+                    <option value="contacted">Contacted</option>
+                    <option value="interested">Interested</option>
+                    <option value="qualified">Qualified</option>
+                    <option value="won">Won</option>
+                    <option value="lost">Lost</option>
+                  </select>
+                </div>
 
-              {lead.aiJustification && (
-                <div style={{ marginBottom: 16, padding: '16px', background: '#f8fafc', borderRadius: 14, border: '1px solid #e2e8f0', position: 'relative' }}>
-                  <div style={{ position: 'absolute', top: -10, left: 12, padding: '2px 10px', background: '#4f46e5', color: 'white', borderRadius: 6, fontSize: 10, fontWeight: 800, letterSpacing: '0.05em' }}>CLOSING STRATEGY (Agency Owner Guide)</div>
-
-                  <p style={{ margin: '4px 0 12px', fontSize: 13, color: '#1e293b', lineHeight: 1.5, fontWeight: 500 }}>
-                    {lead.aiJustification}
-                  </p>
-
-                  {(lead.aiOutreachAngle || lead.aiFollowUpMessage) && (
-                    <div style={{ padding: '12px', background: 'white', borderRadius: 12, border: '1px solid #cbd5e1', marginBottom: 12 }}>
-                      {lead.aiOutreachAngle && (
-                        <div style={{ marginBottom: 10 }}>
-                          <span style={{ display: 'block', fontSize: 10, color: '#64748b', fontWeight: 700, marginBottom: 4, letterSpacing: '0.05em' }}>PRIMARY HOOK</span>
-                          <p style={{ margin: 0, fontSize: 12, color: '#0f172a', fontWeight: 500, lineHeight: 1.4 }}>"{lead.aiOutreachAngle}"</p>
-                        </div>
-                      )}
-                      {lead.aiFollowUpMessage && (
-                        <div>
-                          <span style={{ display: 'block', fontSize: 10, color: '#64748b', fontWeight: 700, marginBottom: 4, letterSpacing: '0.05em' }}>FOLLOW-UP</span>
-                          <p style={{ margin: 0, fontSize: 12, color: '#475569', fontStyle: 'italic', lineHeight: 1.4 }}>"{lead.aiFollowUpMessage}"</p>
-                        </div>
-                      )}
-                    </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                  {lead.rating && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 14, color: '#f59e0b' }}>
+                      <Star style={{ width: 16, height: 16, fill: '#fbbf24' }} /> {lead.rating} ({lead.reviewCount || 0})
+                    </span>
                   )}
-
-                  {lead.aiPainPoints && lead.aiPainPoints.length > 0 && (
-                    <div style={{ marginBottom: 12 }}>
-                      <span style={{ display: 'block', fontSize: 10, color: '#ef4444', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>PAIN POINTS</span>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {lead.aiPainPoints.map(point => (
-                          <span key={point} style={{ padding: '2px 8px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: 6, fontSize: 11, color: '#b91c1c' }}>
-                            ✕ {point}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {lead.aiIdealSolution && (
-                    <div style={{ padding: '12px', background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', borderRadius: 12, border: '1px solid #bbf7d0', marginBottom: 12 }}>
-                      <span style={{ display: 'block', fontSize: 10, color: '#15803d', fontWeight: 700, marginBottom: 4, letterSpacing: '0.05em' }}>IDEAL SOLUTION</span>
-                      <p style={{ margin: 0, fontSize: 13, color: '#166534', fontWeight: 600 }}>{lead.aiIdealSolution}</p>
-                    </div>
-                  )}
-
-                  {lead.aiRecommendedServices && lead.aiRecommendedServices.length > 0 && (
-                    <div>
-                      <span style={{ display: 'block', fontSize: 10, color: '#64748b', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>RECOMMENDED SERVICES</span>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {lead.aiRecommendedServices.map(service => (
-                          <span key={service} style={{ padding: '4px 10px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 11, color: '#475569', fontWeight: 600, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                            {service}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                  {lead.city && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 14, color: '#64748b' }}><MapPin style={{ width: 16, height: 16 }} /> {lead.city}</span>}
+                  {!lead.website && (
+                    <span style={{ padding: '2px 8px', background: '#dcfce7', color: '#16a34a', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                      🎯 No Website
+                    </span>
                   )}
                 </div>
-              )}
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                {lead.phone && (
-                  <>
-                    <a href={`tel:${lead.phone}`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, background: '#eff6ff', color: '#2563eb', fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>
-                      <Phone style={{ width: 16, height: 16 }} /> Call
-                    </a>
-                    <a href={getWhatsAppLink(lead.phone)} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, background: '#dcfce7', color: '#16a34a', fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>
-                      <MessageSquare style={{ width: 16, height: 16 }} /> WhatsApp
-                    </a>
-                  </>
+                {lead.address && (
+                  <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b', lineHeight: 1.5 }}>
+                    📍 {lead.address}
+                  </p>
                 )}
-                {lead.website && (
-                  <a href={lead.website} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, background: '#f1f5f9', color: '#475569', fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>
-                    <Globe style={{ width: 16, height: 16 }} /> Website
-                  </a>
-                )}
-              </div>
 
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8' }}>
-                <span>{new Date(lead.createdAt).toLocaleDateString()}</span>
-                <span style={{ textTransform: 'capitalize', color: '#667eea', fontWeight: 500 }}>{lead.source.replace('_', ' ')}</span>
+                {lead.email && (
+                  <p style={{ margin: '0 0 16px', fontSize: 13, color: '#2563eb' }}>
+                    📧 {lead.email}
+                  </p>
+                )}
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                  {lead.phone && (
+                    <>
+                      <a href={`tel:${lead.phone}`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, background: '#eff6ff', color: '#2563eb', fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>
+                        <Phone style={{ width: 16, height: 16 }} /> Call
+                      </a>
+                      <a href={getWhatsAppLink(lead.phone)} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, background: '#dcfce7', color: '#16a34a', fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>
+                        <MessageSquare style={{ width: 16, height: 16 }} /> WhatsApp
+                      </a>
+                    </>
+                  )}
+                  {lead.email && (
+                    <a href={`mailto:${lead.email}`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, background: '#fef3c7', color: '#d97706', fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>
+                      📧 Email
+                    </a>
+                  )}
+                </div>
+
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8' }}>
+                  <span>{new Date(lead.createdAt).toLocaleDateString()}</span>
+                  <span style={{ fontWeight: 500 }}>{lead.phone}</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {
@@ -419,11 +393,11 @@ export default function Dashboard() {
       {/* Scraper Modal */}
       {scraperOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'white', borderRadius: 24, padding: 32, width: '100%', maxWidth: 480, boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}>
+          <div style={{ background: 'white', borderRadius: 24, padding: 32, width: '100%', maxWidth: 520, boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#0f172a' }}>🔍 Scrape Google Maps</h2>
-                <p style={{ margin: '4px 0 0', fontSize: 14, color: '#64748b' }}>Find hot leads without any API keys</p>
+                <h2 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#0f172a' }}>🔍 Scrape Leads</h2>
+                <p style={{ margin: '4px 0 0', fontSize: 14, color: '#64748b' }}>Find hot leads without websites</p>
               </div>
               <button onClick={() => setScraperOpen(false)} style={{ padding: 8, borderRadius: 8, border: 'none', background: '#f1f5f9', cursor: 'pointer' }}>
                 <X style={{ width: 20, height: 20, color: '#64748b' }} />
@@ -431,11 +405,61 @@ export default function Dashboard() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Source Selection */}
+              <div>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 10 }}>Data Sources</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <button
+                    type="button"
+                    onClick={() => setScrapeForm({ ...scrapeForm, source: 'google' })}
+                    style={{
+                      padding: '16px 12px',
+                      borderRadius: 12,
+                      border: scrapeForm.source === 'google' ? '2px solid #667eea' : '2px solid #e2e8f0',
+                      background: scrapeForm.source === 'google' ? 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)' : 'white',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{ fontSize: 20, marginBottom: 4 }}>🗺️</div>
+                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>Google Maps</div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Single source</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScrapeForm({ ...scrapeForm, source: 'all' })}
+                    style={{
+                      padding: '16px 12px',
+                      borderRadius: 12,
+                      border: scrapeForm.source === 'all' ? '2px solid #10b981' : '2px solid #e2e8f0',
+                      background: scrapeForm.source === 'all' ? 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)' : 'white',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s',
+                      position: 'relative',
+                    }}
+                  >
+                    <div style={{ position: 'absolute', top: -8, right: 8, background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
+                      RECOMMENDED
+                    </div>
+                    <div style={{ fontSize: 20, marginBottom: 4 }}>🚀</div>
+                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>All Sources</div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                      <span style={{ background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, marginRight: 4 }}>Maps</span>
+                      <span style={{ background: '#fef3c7', color: '#d97706', padding: '1px 6px', borderRadius: 4, marginRight: 4 }}>JustDial</span>
+                      <span style={{ background: '#fce7f3', color: '#db2777', padding: '1px 6px', borderRadius: 4, marginRight: 4 }}>IndiaMART</span>
+                      <span style={{ background: '#ffedd5', color: '#ea580c', padding: '1px 6px', borderRadius: 4 }}>Yelp</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Search Query *</label>
                 <input
                   type="text"
-                  placeholder="e.g., restaurants, marketing agencies, gyms..."
+                  placeholder="e.g., dental clinics, CA firms, restaurants..."
                   value={scrapeForm.query}
                   onChange={(e) => setScrapeForm({ ...scrapeForm, query: e.target.value })}
                   style={{ width: '100%', padding: 14, borderRadius: 12, border: '2px solid #e2e8f0', fontSize: 15, outline: 'none', boxSizing: 'border-box', background: '#fff', color: '#0f172a' }}
@@ -445,7 +469,7 @@ export default function Dashboard() {
                 <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Location</label>
                 <input
                   type="text"
-                  placeholder="e.g., Mumbai, Delhi, Bangalore..."
+                  placeholder="e.g., New York, NY, Dubai, London, Mumbai..."
                   value={scrapeForm.location}
                   onChange={(e) => setScrapeForm({ ...scrapeForm, location: e.target.value })}
                   style={{ width: '100%', padding: 14, borderRadius: 12, border: '2px solid #e2e8f0', fontSize: 15, outline: 'none', boxSizing: 'border-box', background: '#fff', color: '#0f172a' }}
@@ -462,11 +486,39 @@ export default function Dashboard() {
                   style={{ width: '100%', padding: 14, borderRadius: 12, border: '2px solid #e2e8f0', fontSize: 15, outline: 'none', boxSizing: 'border-box', background: '#fff', color: '#0f172a' }}
                 />
               </div>
+
+              {/* Quality Filter Info */}
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 16 }}>🎯</span>
+                  <span style={{ fontWeight: 600, color: '#166534', fontSize: 13 }}>Smart Filtering Active</span>
+                </div>
+                <p style={{ margin: 0, fontSize: 12, color: '#15803d', lineHeight: 1.5 }}>
+                  Only businesses <strong>without websites</strong> will be scraped. Perfect for selling web services!
+                </p>
+              </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 12, marginTop: 32 }}>
+            <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
               <button onClick={() => setScraperOpen(false)} style={{ flex: 1, padding: 16, borderRadius: 12, border: '2px solid #e2e8f0', background: 'white', color: '#475569', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={handleScrape} disabled={!scrapeForm.query} style={{ flex: 1, padding: 16, borderRadius: 12, border: 'none', background: scrapeForm.query ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#e2e8f0', color: scrapeForm.query ? 'white' : '#94a3b8', fontSize: 15, fontWeight: 600, cursor: scrapeForm.query ? 'pointer' : 'not-allowed', boxShadow: scrapeForm.query ? '0 8px 20px rgba(102,126,234,0.4)' : 'none' }}>Start Scraping</button>
+              <button
+                onClick={handleScrape}
+                disabled={!scrapeForm.query}
+                style={{
+                  flex: 1,
+                  padding: 16,
+                  borderRadius: 12,
+                  border: 'none',
+                  background: scrapeForm.query ? (scrapeForm.source === 'all' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)') : '#e2e8f0',
+                  color: scrapeForm.query ? 'white' : '#94a3b8',
+                  fontSize: 15,
+                  fontWeight: 600,
+                  cursor: scrapeForm.query ? 'pointer' : 'not-allowed',
+                  boxShadow: scrapeForm.query ? '0 8px 20px rgba(16,185,129,0.4)' : 'none'
+                }}
+              >
+                {scrapeForm.source === 'all' ? '🚀 Scrape All Sources' : '🗺️ Scrape Google Maps'}
+              </button>
             </div>
           </div>
         </div>
