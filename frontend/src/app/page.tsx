@@ -83,7 +83,7 @@ export default function Dashboard() {
   const [scraperOpen, setScraperOpen] = useState(false);
   const [filter, setFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [scrapeForm, setScrapeForm] = useState({ query: '', location: '', limit: 30, source: 'all' as 'google' | 'all' });
+  const [scrapeForm, setScrapeForm] = useState({ query: '', location: '', limit: 30, source: 'google' as 'google' | 'india' | 'yelp' });
 
   const fetchData = async () => {
     setLoading(true);
@@ -108,7 +108,12 @@ export default function Dashboard() {
     setScraping(true);
     try {
       // Choose endpoint based on source selection
-      const endpoint = scrapeForm.source === 'all' ? '/scraper/all-sources' : '/scraper/google-maps';
+      const endpointMap = {
+        google: '/scraper/google-maps',
+        india: '/scraper/india',
+        yelp: '/scraper/yelp'
+      };
+      const endpoint = endpointMap[scrapeForm.source];
 
       const res = await fetchScraperAPI(endpoint, {
         method: 'POST',
@@ -120,26 +125,13 @@ export default function Dashboard() {
       });
 
       if (res.success) {
-        if (scrapeForm.source === 'all') {
-          // Multi-source response
-          alert(
-            `✅ Multi-Source Scraping Complete!\n\n` +
-            `📊 Sources:\n` +
-            `   • Google Maps: ${res.data.sources?.googleMaps || 0} leads\n` +
-            `   • JustDial: ${res.data.sources?.justDial || 0} leads\n` +
-            `   • IndiaMART: ${res.data.sources?.indiaMART || 0} leads\n` +
-            `   • Yelp (Intl): ${res.data.sources?.yelp || 0} leads\n\n` +
-            `📈 Results:\n` +
-            `   • Total Scraped: ${res.data.totalScraped || 0}\n` +
-            `   • Unique Leads: ${res.data.uniqueLeads || 0}\n` +
-            `   • 🔥 Hot Leads: ${res.data.hotLeads || 0}\n` +
-            `   • 💾 Saved: ${res.data.saved || 0}\n` +
-            `   • 📋 Duplicates: ${res.data.duplicates || 0}`
-          );
-        } else {
-          // Google Maps only response
-          alert(`✅ Scraped ${res.data.scraped} leads!\n🔥 Hot Leads: ${res.data.hotLeads}\n💾 Saved: ${res.data.saved}`);
-        }
+        alert(
+          `✅ Scraping Complete!\n\n` +
+          `📊 Results:\n` +
+          `   • Traverses: ${res.data.scraped || 0} leads\n` +
+          `   • 🥇 Saved: ${res.data.saved || 0}\n` +
+          `   • 📋 Duplicates: ${res.data.duplicates || 0}`
+        );
         fetchData();
       } else {
         alert(`❌ Error: ${res.error}`);
@@ -408,49 +400,54 @@ export default function Dashboard() {
               {/* Source Selection */}
               <div>
                 <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 10 }}>Data Sources</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                   <button
                     type="button"
                     onClick={() => setScrapeForm({ ...scrapeForm, source: 'google' })}
                     style={{
-                      padding: '16px 12px',
+                      padding: '16px 8px',
                       borderRadius: 12,
                       border: scrapeForm.source === 'google' ? '2px solid #667eea' : '2px solid #e2e8f0',
                       background: scrapeForm.source === 'google' ? 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)' : 'white',
                       cursor: 'pointer',
-                      textAlign: 'left',
+                      textAlign: 'center',
                       transition: 'all 0.2s',
                     }}
                   >
                     <div style={{ fontSize: 20, marginBottom: 4 }}>🗺️</div>
-                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>Google Maps</div>
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Single source</div>
+                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 13 }}>Google Maps</div>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setScrapeForm({ ...scrapeForm, source: 'all' })}
+                    onClick={() => setScrapeForm({ ...scrapeForm, source: 'india' })}
                     style={{
-                      padding: '16px 12px',
+                      padding: '16px 8px',
                       borderRadius: 12,
-                      border: scrapeForm.source === 'all' ? '2px solid #10b981' : '2px solid #e2e8f0',
-                      background: scrapeForm.source === 'all' ? 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)' : 'white',
+                      border: scrapeForm.source === 'india' ? '2px solid #f59e0b' : '2px solid #e2e8f0',
+                      background: scrapeForm.source === 'india' ? 'linear-gradient(135deg, #fffbev 0%, #fef3c7 100%)' : 'white',
                       cursor: 'pointer',
-                      textAlign: 'left',
+                      textAlign: 'center',
                       transition: 'all 0.2s',
-                      position: 'relative',
                     }}
                   >
-                    <div style={{ position: 'absolute', top: -8, right: 8, background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
-                      RECOMMENDED
-                    </div>
-                    <div style={{ fontSize: 20, marginBottom: 4 }}>🚀</div>
-                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>All Sources</div>
-                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-                      <span style={{ background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, marginRight: 4 }}>Maps</span>
-                      <span style={{ background: '#fef3c7', color: '#d97706', padding: '1px 6px', borderRadius: 4, marginRight: 4 }}>JustDial</span>
-                      <span style={{ background: '#fce7f3', color: '#db2777', padding: '1px 6px', borderRadius: 4, marginRight: 4 }}>IndiaMART</span>
-                      <span style={{ background: '#ffedd5', color: '#ea580c', padding: '1px 6px', borderRadius: 4 }}>Yelp</span>
-                    </div>
+                    <div style={{ fontSize: 20, marginBottom: 4 }}>🇮🇳</div>
+                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 13 }}>JD & Mart</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScrapeForm({ ...scrapeForm, source: 'yelp' })}
+                    style={{
+                      padding: '16px 8px',
+                      borderRadius: 12,
+                      border: scrapeForm.source === 'yelp' ? '2px solid #ef4444' : '2px solid #e2e8f0',
+                      background: scrapeForm.source === 'yelp' ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)' : 'white',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{ fontSize: 20, marginBottom: 4 }}>🌎</div>
+                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 13 }}>Yelp (Intl)</div>
                   </button>
                 </div>
               </div>
@@ -509,15 +506,17 @@ export default function Dashboard() {
                   padding: 16,
                   borderRadius: 12,
                   border: 'none',
-                  background: scrapeForm.query ? (scrapeForm.source === 'all' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)') : '#e2e8f0',
+                  background: scrapeForm.query ? '#667eea' : '#e2e8f0',
                   color: scrapeForm.query ? 'white' : '#94a3b8',
                   fontSize: 15,
                   fontWeight: 600,
                   cursor: scrapeForm.query ? 'pointer' : 'not-allowed',
-                  boxShadow: scrapeForm.query ? '0 8px 20px rgba(16,185,129,0.4)' : 'none'
+                  boxShadow: scrapeForm.query ? '0 8px 20px rgba(102,126,234,0.4)' : 'none'
                 }}
               >
-                {scrapeForm.source === 'all' ? '🚀 Scrape All Sources' : '🗺️ Scrape Google Maps'}
+                {scrapeForm.source === 'google' ? '🗺️ Scrape Google Maps' :
+                  scrapeForm.source === 'india' ? '🇮🇳 Scrape JD & Mart' :
+                    '🌎 Scrape Yelp (Intl)'}
               </button>
             </div>
           </div>

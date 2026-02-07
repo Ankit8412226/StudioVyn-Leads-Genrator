@@ -209,7 +209,6 @@ app.delete('/api/leads/bulk/delete', async (req, res) => {
 // ============================================
 // SCRAPER ROUTES
 // ============================================
-
 // Scrape Google Maps
 app.post('/api/scraper/google-maps', async (req, res) => {
   try {
@@ -296,6 +295,150 @@ app.post('/api/scraper/google-maps', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Scraping error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
+// Scrape India-specific sources (JustDial + IndiaMART)
+app.post('/api/scraper/india', async (req, res) => {
+  try {
+    const { query, location, limit = 30 } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ success: false, error: 'Query is required' });
+    }
+
+    console.log(`\n🇮🇳 Starting India-specific scrape: "${query}" in "${location || 'India'}"`);
+
+    const [justDialLeads, indiaMartLeads] = await Promise.allSettled([
+      scrapeJustDial({ query, city: location || 'Mumbai', limit: Math.ceil(limit / 2) }),
+      scrapeIndiaMART({ query, city: location, limit: Math.ceil(limit / 2) }),
+    ]);
+
+    const allLeads: any[] = [];
+
+    if (justDialLeads.status === 'fulfilled') {
+      justDialLeads.value.forEach(l => allLeads.push({ ...l, source: 'justdial' }));
+    }
+    if (indiaMartLeads.status === 'fulfilled') {
+      indiaMartLeads.value.forEach(l => allLeads.push({ ...l, source: 'indiamart' }));
+    }
+
+    // Deduplicate
+    const seenPhones = new Set<string>();
+    const seenNames = new Set<string>();
+    const uniqueLeads = allLeads.filter(lead => {
+      const phoneKey = lead.phone?.replace(/\D/g, '') || '';
+      const nameKey = lead.businessName.toLowerCase();
+      if (phoneKey && seenPhones.has(phoneKey)) return false;
+      if (seenNames.has(nameKey)) return false;
+      if (phoneKey) seenPhones.add(phoneKey);
+      seenNames.add(nameKey);
+      return true;
+    });
+
+    // Save to DB
+    let savedCount = 0;
+    let duplicateCount = 0;
+    if (mongoose.connection.readyState === 1) {
+      for (const scraped of uniqueLeads) {
+        try {
+          const existing = await Lead.findOne({
+            $or: [
+              ...(scraped.phone ? [{ phone: scraped.phone }] : []),
+              { businessName: scraped.businessName },
+            ],
+          });
+          if (existing) {
+            duplicateCount++;
+            continue;
+          }
+          const lead = new Lead({
+            ...scraped,
+            fullName: scraped.businessName,
+            city: scraped.city || location,
+            status: 'new',
+            isHotLead: !!(scraped.rating && scraped.rating >= 4.0),
+            priority: (scraped.rating && scraped.rating >= 4.0) ? 'high' : 'medium',
+          });
+          await lead.save();
+          savedCount++;
+        } catch (err) { /* skip */ }
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        scraped: uniqueLeads.length,
+        saved: savedCount,
+        duplicates: duplicateCount,
+        leads: uniqueLeads,
+        sources: {
+          justDial: justDialLeads.status === 'fulfilled' ? justDialLeads.value.length : 0,
+          indiaMART: indiaMartLeads.status === 'fulfilled' ? indiaMartLeads.value.length : 0,
+        }
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Scrape Yelp (International)
+app.post('/api/scraper/yelp', async (req, res) => {
+  try {
+    const { query, location, limit = 30 } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ success: false, error: 'Query is required' });
+    }
+
+    console.log(`\n🌎 Starting Yelp scrape: "${query}" in "${location || 'New York, NY'}"`);
+
+    const yelpLeads = await scrapeYelp({ query, location: location || 'New York, NY', limit });
+
+    // Save to DB
+    let savedCount = 0;
+    let duplicateCount = 0;
+    if (mongoose.connection.readyState === 1) {
+      for (const scraped of yelpLeads) {
+        try {
+          const existing = await Lead.findOne({
+            $or: [
+              ...(scraped.phone ? [{ phone: scraped.phone }] : []),
+              { businessName: scraped.businessName },
+            ],
+          });
+          if (existing) {
+            duplicateCount++;
+            continue;
+          }
+          const lead = new Lead({
+            ...scraped,
+            fullName: scraped.businessName,
+            city: location,
+            status: 'new',
+            isHotLead: !!(scraped.rating && scraped.rating >= 4.0),
+            priority: (scraped.rating && scraped.rating >= 4.0) ? 'high' : 'medium',
+          });
+          await lead.save();
+          savedCount++;
+        } catch (err) { /* skip */ }
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        scraped: yelpLeads.length,
+        saved: savedCount,
+        duplicates: duplicateCount,
+        leads: yelpLeads
+      },
+    });
+  } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
