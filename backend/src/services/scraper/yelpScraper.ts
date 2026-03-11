@@ -1,4 +1,9 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
+import { Page } from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+
+// Use stealth plugin to avoid detection
+puppeteer.use(StealthPlugin());
 
 export interface YelpLead {
   businessName: string;
@@ -17,37 +22,41 @@ export interface YelpLead {
 
 export interface YelpConfig {
   query: string;
-  location: string; // e.g., "New York, NY", "London, UK", "Dubai"
+  location: string;
   limit?: number;
 }
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-/**
- * Yelp Scraper - Extracts businesses from Yelp (US, UK, Canada, UAE)
- * Filters for businesses WITHOUT websites for selling web services
- */
 export class YelpScraper {
-  private browser: Browser | null = null;
+  private browser: any = null;
   private page: Page | null = null;
 
   async init(): Promise<void> {
-    console.log('🚀 Starting Yelp browser...');
+    console.log('🚀 Starting Yelp browser with Stealth mode...');
     this.browser = await puppeteer.launch({
       headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
         '--window-size=1920,1080',
       ],
     });
 
     this.page = await this.browser.newPage();
-    await this.page.setViewport({ width: 1920, height: 1080 });
-    await this.page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    await this.page!.setViewport({ width: 1920, height: 1080 });
+
+    // Set a very realistic user agent
+    await this.page!.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
     );
+
+    // Extra headers to look more human
+    await this.page!.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+    });
   }
 
   async close(): Promise<void> {
@@ -58,221 +67,340 @@ export class YelpScraper {
     }
   }
 
+  private async checkCaptcha(): Promise<boolean> {
+    if (!this.page) return false;
+
+    const captchaExists = await this.page.evaluate(() => {
+      const texts = ['robot', 'captcha', 'security check', 'verification', 'access to this page has been denied'];
+      const bodyText = document.body.innerText.toLowerCase();
+      const hasText = texts.some(t => bodyText.includes(t));
+      const hasIframe = !!document.querySelector('iframe[title="DataDome CAPTCHA"]');
+      const hasSlider = !!document.querySelector('#px-captcha, #captcha-container, .slider');
+      return hasText || hasIframe || hasSlider;
+    });
+
+    if (captchaExists) {
+      console.log('⚠️ Yelp Block detected! (CAPTCHA / Slider / DataDome)');
+      return true;
+    }
+    return false;
+  }
+
+  private async solveSlider(): Promise<boolean> {
+    if (!this.page) return false;
+
+    try {
+      // Find the DataDome iframe
+      const frameElement = await this.page.$('iframe[title="DataDome CAPTCHA"]');
+      if (!frameElement) {
+        console.log('❌ Slider iframe not found.');
+        return false;
+      }
+
+      const frame = await frameElement.contentFrame();
+      if (!frame) {
+        console.log('❌ Could not access iframe content.');
+        return false;
+      }
+
+      console.log('🤖 Attempting to solve slider CAPTCHA...');
+
+      // Find the slider handle
+      const sliderHandle = await frame.$('.slider');
+      const sliderContainer = await frame.$('.sliderContainer');
+
+      if (!sliderHandle || !sliderContainer) {
+        console.log('❌ Slider elements not found inside iframe.');
+        return false;
+      }
+
+      const handleBox = await sliderHandle.boundingBox();
+      const containerBox = await sliderContainer.boundingBox();
+
+      if (!handleBox || !containerBox) {
+        console.log('❌ Could not get element coordinates.');
+        return false;
+      }
+
+      // Human-like drag: Start at center of handle
+      const startX = handleBox.x + handleBox.width / 2;
+      const startY = handleBox.y + handleBox.height / 2;
+
+      // Target is near the end of the container
+      const targetX = containerBox.x + containerBox.width - (handleBox.width / 2) - 5;
+
+      // Move mouse to start position
+      await this.page.mouse.move(startX, startY);
+      await delay(500 + Math.random() * 500);
+      await this.page.mouse.down();
+      await delay(200 + Math.random() * 200);
+
+      // Move in random steps with jitter
+      const steps = 20 + Math.floor(Math.random() * 15);
+      const stepX = (targetX - startX) / steps;
+
+      for (let i = 1; i <= steps; i++) {
+        const currentX = startX + (stepX * i);
+        // Add random Y jitter to look more human (+/- 3px)
+        const jitterY = startY + (Math.random() * 6 - 3);
+
+        // Speed up in the middle, slow at start/end (Ease in/out)
+        await this.page.mouse.move(currentX, jitterY);
+
+        // Randomized delay between steps
+        const stepDelay = (i < 5 || i > steps - 5) ? 60 + Math.random() * 60 : 15 + Math.random() * 20;
+        await delay(stepDelay);
+      }
+
+      await delay(300 + Math.random() * 500);
+      await this.page.mouse.up();
+
+      console.log('✅ Slider drag action finished. Waiting to see if it clears...');
+      await delay(5000); // Give it time to process and reload
+
+      return true;
+    } catch (error: any) {
+      console.error('❌ Error solving slider:', error.message);
+      return false;
+    }
+  }
+
   async scrape(config: YelpConfig): Promise<YelpLead[]> {
-    const { query, location, limit = 30 } = config;
+    let { query, location, limit = 30 } = config;
     const leads: YelpLead[] = [];
     const seenNames = new Set<string>();
+
+    // Fallback for too broad locations
+    if (location.toLowerCase() === 'us' || location.toLowerCase() === 'usa') {
+      location = 'San Francisco, CA';
+    }
 
     try {
       if (!this.page) {
         await this.init();
       }
 
-      // Yelp search URL
+      // Random User Agent rotation for this session
+      const userAgents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+      ];
+      await this.page!.setUserAgent(userAgents[Math.floor(Math.random() * userAgents.length)]);
+
+      // Step 1: Visit homepage and do some "human" scrolling
+      console.log('🏠 Warming up on Yelp homepage...');
+      await this.page!.goto('https://www.yelp.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await delay(2000 + Math.random() * 2000);
+      await this.page!.evaluate(() => window.scrollBy(0, 300 + Math.random() * 300));
+      await delay(1000);
+
+      // Step 2: Use search URL but with extra random params to look less like a scraper
       const searchQuery = encodeURIComponent(query);
       const searchLocation = encodeURIComponent(location);
-      const url = `https://www.yelp.com/search?find_desc=${searchQuery}&find_loc=${searchLocation}`;
+      // Adding common Yelp URL params to look natural
+      const url = `https://www.yelp.com/search?find_desc=${searchQuery}&find_loc=${searchLocation}&ns=1`;
 
       console.log(`🔍 Yelp: Searching "${query}" in "${location}"`);
-      console.log(`🔍 Navigating to: ${url}`);
+      await this.page!.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await delay(4000 + Math.random() * 4000);
 
-      await this.page!.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-      await delay(3000);
+      // Check for Bot Detection
+      if (await this.checkCaptcha()) {
+        const solved = await this.solveSlider();
+        if (solved) {
+          // Check again after solving attempt
+          if (await this.checkCaptcha()) {
+            console.log('❌ Slider solution failed or another block appeared.');
+            return [];
+          }
+          console.log('🎉 Slider CAPTCHA solved successfully!');
+        } else {
+          return [];
+        }
+      }
 
-      // Wait for listings
-      await this.page!.waitForSelector('[data-testid="serp-ia-card"], .container__09f24__FeTO6, .businessName__09f24', { timeout: 15000 }).catch(() => {
-        console.log('⚠️ Yelp listings not found, trying anyway...');
-      });
-
-      let page = 0;
+      let pageNum = 0;
       const maxPages = 3;
 
-      while (leads.length < limit && page < maxPages) {
-        // Extract business listings
+      while (leads.length < limit && pageNum < maxPages) {
+        console.log(`📄 Scanning results page ${pageNum + 1}...`);
+
+        // Final check for results or empty state
+        const hasResults = await this.page!.evaluate(() => {
+          return !!document.querySelector('[data-testid="serp-ia-card"], [class*="container"], h3 a, [class*="businessName"]');
+        });
+
+        if (!hasResults) {
+          console.log('⚠️ No obvious listings found. Trying one more scroll...');
+          await this.page!.evaluate(() => window.scrollBy(0, 600));
+          await delay(2000);
+        }
+
         const listings = await this.page!.evaluate(() => {
           const results: any[] = [];
 
-          // Yelp listing selectors
-          const cards = document.querySelectorAll('[data-testid="serp-ia-card"], .container__09f24__FeTO6, [class*="searchResult"]');
+          // These are the most stable indicators of a business card in 2024/2025
+          const cardSelectors = [
+            'div[data-testid="serp-ia-card"]',
+            'li[class*="css-"]',
+            'div[class*="container__"]',
+            '[class*="searchResult"]'
+          ];
+
+          let cards: Element[] = [];
+          for (const sel of cardSelectors) {
+            const found = Array.from(document.querySelectorAll(sel));
+            // Filter out cards that don't have an H3 (likely ads or layout divs)
+            const validCards = found.filter(c => c.querySelector('h3'));
+            if (validCards.length > 3) {
+              cards = validCards;
+              break;
+            }
+          }
+
+          // Backtrack: if still no cards, just find all H3s and get their containers
+          if (cards.length === 0) {
+            cards = Array.from(document.querySelectorAll('h3'))
+              .map(h3 => h3.closest('li, div[class*="container"]'))
+              .filter((el): el is Element => el !== null);
+          }
 
           cards.forEach((card) => {
             try {
-              // Business name
-              const nameEl = card.querySelector('a[class*="businessName"], h3 a, .businessName__09f24 a, [class*="css-19v1rkv"]');
+              // Name & Link
+              const nameEl = card.querySelector('h3 a, a[class*="businessName"], a[class*="css-19v1rkv"]');
               const name = nameEl?.textContent?.trim() || '';
+              const detailUrl = (nameEl as HTMLAnchorElement)?.href || '';
 
               // Rating
               let rating = 0;
-              const ratingEl = card.querySelector('[aria-label*="star rating"], [class*="rating"], [class*="stars"]');
+              const ratingEl = card.querySelector('[aria-label*="star rating"], [class*="rating"]');
               if (ratingEl) {
-                const ariaLabel = ratingEl.getAttribute('aria-label') || '';
-                const match = ariaLabel.match(/([\d.]+)\s*star/i);
+                const aria = ratingEl.getAttribute('aria-label') || '';
+                const match = aria.match(/([\d.]+)/);
                 if (match) rating = parseFloat(match[1]);
               }
 
-              // Review count
-              let reviewCount = 0;
-              const reviewEl = card.querySelector('[class*="reviewCount"], .css-chan6m');
-              if (reviewEl) {
-                const text = reviewEl.textContent || '';
-                const match = text.match(/(\d+)/);
-                if (match) reviewCount = parseInt(match[0], 10);
-              }
-
               // Category
-              let category = '';
-              const categoryEl = card.querySelector('[class*="category"], .css-11bijt4, .priceCategory__09f24');
-              if (categoryEl) category = categoryEl.textContent?.replace(/\$+/g, '').trim() || '';
+              const spans = Array.from(card.querySelectorAll('span, p, button'));
+              const category = spans.find(s => {
+                const txt = s.textContent || '';
+                return txt.length > 2 && txt.length < 25 && !txt.includes('(') && !txt.includes('$');
+              })?.textContent?.trim() || '';
 
-              // Price level
-              let priceLevel = '';
-              const priceMatch = card.innerHTML.match(/(\${1,4})/);
-              if (priceMatch) priceLevel = priceMatch[1];
-
-              // Address/Location
-              let address = '';
-              const addressEl = card.querySelector('[class*="secondaryAttributes"], .css-e81eai, .priceRange__09f24');
-              if (addressEl) {
-                const text = addressEl.textContent || '';
-                // Extract address (usually after category and price)
-                address = text.replace(/\$+/g, '').replace(category, '').trim();
+              if (name && detailUrl && detailUrl.includes('/biz/')) {
+                results.push({ name, rating, detailUrl, category });
               }
-
-              // Get business URL for detail scraping
-              let detailUrl = '';
-              if (nameEl) {
-                detailUrl = (nameEl as HTMLAnchorElement).href || '';
-              }
-
-              if (name && name.length > 2) {
-                results.push({
-                  name,
-                  rating,
-                  reviewCount,
-                  category,
-                  priceLevel,
-                  address,
-                  detailUrl
-                });
-              }
-            } catch (e) {
-              // Skip bad entries
-            }
+            } catch (e) { }
           });
-
           return results;
         });
 
-        console.log(`📋 Yelp Page ${page + 1}: Found ${listings.length} listings`);
+        console.log(`📋 Found ${listings.length} listings on page ${pageNum + 1}`);
 
-        // Process each listing
         for (const listing of listings) {
           if (leads.length >= limit) break;
           if (seenNames.has(listing.name.toLowerCase())) continue;
 
-          // Click on listing to get phone and website info
-          if (listing.detailUrl) {
-            try {
-              await this.page!.goto(listing.detailUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-              await delay(2000);
+          try {
+            console.log(`🔗 Scanning: ${listing.name}...`);
+            await this.page!.goto(listing.detailUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await delay(2500 + Math.random() * 2500);
 
-              // Extract phone and website from detail page
-              const details = await this.page!.evaluate(() => {
-                let phone = '';
-                let website = '';
+            const details = await this.page!.evaluate(() => {
+              let phone = '';
+              let website = '';
+              let address = '';
 
-                // Phone - multiple selectors
-                const phoneEl = document.querySelector('a[href^="tel:"], [class*="phone"], p[class*="css-1p9ibgf"]');
-                if (phoneEl) {
-                  const href = phoneEl.getAttribute('href') || '';
-                  phone = href.replace('tel:', '') || phoneEl.textContent?.replace(/\D/g, '') || '';
-                }
-
-                // Website
-                const websiteEl = document.querySelector('a[href*="biz_redir"], a[class*="css-1idmmu3"]');
-                if (websiteEl) {
-                  const href = websiteEl.getAttribute('href') || '';
-                  if (href.includes('biz_redir') || (!href.includes('yelp.com') && href.startsWith('http'))) {
-                    website = href;
-                  }
-                }
-
-                // Also check for "Website" text links
-                const allLinks = document.querySelectorAll('a');
-                allLinks.forEach(link => {
-                  if (link.textContent?.toLowerCase().includes('website') ||
-                    link.textContent?.toLowerCase().includes('business site')) {
-                    website = link.href || website;
-                  }
-                });
-
-                return { phone, website };
+              // Better phone detection logic
+              const allElements = Array.from(document.querySelectorAll('a, p, span, div'));
+              const phoneMatch = allElements.find(el => {
+                const txt = el.textContent || '';
+                return /^\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}$/.test(txt.trim()) ||
+                  /^\+\d{1,3}\s?\(?\d{2,3}\)?[\s.-]?\d{3,4}[\s.-]?\d{4}$/.test(txt.trim());
               });
+              phone = phoneMatch?.textContent?.trim() || '';
 
-              // Skip if has website (we want leads without websites)
-              if (details.website && !details.website.includes('yelp.com')) {
-                console.log(`⏭️ Skipping ${listing.name}: Has website`);
-                // Go back to search results
-                await this.page!.goBack({ waitUntil: 'networkidle2' });
-                await delay(1000);
-                continue;
+              if (!phone) {
+                const telLink = document.querySelector('a[href^="tel:"]');
+                phone = telLink?.getAttribute('href')?.replace('tel:', '') || '';
               }
 
-              // Skip if no phone
-              if (!details.phone || details.phone.length < 8) {
-                console.log(`⏭️ Skipping ${listing.name}: No phone number`);
-                await this.page!.goBack({ waitUntil: 'networkidle2' });
-                await delay(1000);
-                continue;
+              // Website detection (avoiding Yelp internal links)
+              const websiteSelectors = [
+                'a[href*="biz_redir"]',
+                'a[class*="css-1idmmu3"]',
+                'a[target="_blank"][rel*="nofollow"]',
+                'a[role="link"]'
+              ];
+
+              for (const sel of websiteSelectors) {
+                const link = document.querySelector(sel) as HTMLAnchorElement;
+                if (link && link.href) {
+                  const href = link.href;
+                  if (href.includes('biz_redir')) {
+                    const params = new URLSearchParams(href.split('?')[1]);
+                    const decoded = params.get('url');
+                    if (decoded) { website = decodeURIComponent(decoded); break; }
+                  } else if (!href.includes('yelp.') && (href.startsWith('http') || href.startsWith('www'))) {
+                    website = href;
+                    break;
+                  }
+                }
               }
 
+              // Address
+              const addressEl = document.querySelector('address, [class*="address"]');
+              address = addressEl?.textContent?.replace('Get Directions', '').trim() || '';
+
+              return { phone, website, address };
+            });
+
+            // If it has a website, we skip it (not a lead for us)
+            if (details.website && !details.website.includes('yelp.com')) {
+              console.log(`⏭️ Skipping ${listing.name}: Already has website.`);
+            } else if (details.phone && details.phone.length >= 8) {
               seenNames.add(listing.name.toLowerCase());
-
               leads.push({
                 businessName: listing.name,
                 fullName: listing.name,
                 phone: details.phone,
-                address: listing.address,
+                address: details.address || '',
                 city: location,
                 rating: listing.rating,
-                reviewCount: listing.reviewCount,
                 category: listing.category,
-                priceLevel: listing.priceLevel,
                 source: 'yelp',
               });
-
-              console.log(`✅ Yelp ${leads.length}/${limit}: ${listing.name}`);
-              console.log(`   📞 Phone: ${details.phone}`);
-              console.log(`   ⭐ Rating: ${listing.rating} (${listing.reviewCount} reviews)`);
-              console.log(`   🎯 No website - Perfect foreign lead!`);
-
-              // Go back to search results
-              await this.page!.goBack({ waitUntil: 'networkidle2' });
-              await delay(1000);
-
-            } catch (detailError) {
-              console.log(`⚠️ Could not get details for ${listing.name}`);
+              console.log(`✅ ${leads.length}/${limit}: ${listing.name} (Lead found!)`);
+            } else {
+              console.log(`⏭️ Skipping ${listing.name}: No phone found.`);
             }
+
+            await delay(1500 + Math.random() * 2000);
+          } catch (e: any) {
+            console.log(`⚠️ Error details: ${e.message}`);
           }
         }
 
-        // Go to next page if needed
         if (leads.length < limit) {
-          const nextPageUrl = `${url}&start=${(page + 1) * 10}`;
-          await this.page!.goto(nextPageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-          await delay(2000);
-          page++;
+          pageNum++;
+          const nextUrl = `${url}&start=${pageNum * 10}`;
+          try {
+            await this.page!.goto(nextUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await delay(3000 + Math.random() * 3000);
+          } catch (e) { break; }
         } else {
           break;
         }
       }
 
-      console.log(`\n✅ Yelp scraping complete: ${leads.length} leads (no website)`);
+      console.log(`\n🏁 Yelp complete: ${leads.length} leads gathered.`);
       return leads;
 
     } catch (error: any) {
-      console.error('❌ Yelp scraping error:', error.message);
-      return leads; // Return what we have
+      console.error('❌ Scraper error:', error.message);
+      return leads;
     }
   }
 }
@@ -282,7 +410,6 @@ let yelpInstance: YelpScraper | null = null;
 export async function scrapeYelp(config: YelpConfig): Promise<YelpLead[]> {
   if (!yelpInstance) {
     yelpInstance = new YelpScraper();
-    await yelpInstance.init();
   }
 
   try {

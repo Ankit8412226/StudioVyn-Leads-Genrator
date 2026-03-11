@@ -2,7 +2,11 @@ import cors from 'cors';
 import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
+import { connectDB } from './db';
+import { Campaign } from './models/Campaign';
+import { CampaignLead } from './models/CampaignLead';
 import { Lead } from './models/Lead';
+import { addLeadsToCampaign, createCampaign, enqueueCampaignLeads } from './services/campaignService';
 import { scrapeGoogleMaps } from './services/scraper/googleMapsScraper';
 import { IndiaMartLead, scrapeIndiaMART } from './services/scraper/indiamartScraper';
 import { JustDialLead, scrapeJustDial } from './services/scraper/justDialScraper';
@@ -11,11 +15,6 @@ import { scrapeYelp, YelpLead } from './services/scraper/yelpScraper';
 const app = express();
 const PORT = process.env.PORT || 5000;
 const IS_VERCEL = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
-
-// Use MongoDB Atlas free tier or local MongoDB
-// For local: mongodb://localhost:27017/studiovyn-leads
-// For Atlas: Get your connection string from mongodb.com/cloud/atlas
-const MONGODB_URI = 'mongodb+srv://ankitpandey841226_db_user:3PLwsbcSGpYf5r9w@cluster0.sneikwd.mongodb.net/studiovyn-leads?retryWrites=true&w=majority&appName=Cluster0'
 
 
 // Middleware
@@ -26,31 +25,6 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
-
-// Connect to MongoDB with retry
-const connectDB = async () => {
-  if (!MONGODB_URI) {
-    console.log('⚠️ MONGODB_URI is not set. Skipping MongoDB connection.');
-    return;
-  }
-
-  try {
-    console.log('🔌 Attempting to connect to MongoDB...');
-    await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 10000,
-      family: 4, // Force IPv4
-    });
-    console.log('✅ Connected to MongoDB');
-  } catch (err: any) {
-    console.error('❌ MongoDB Connection Error:', err.message);
-    console.log('⚠️ MongoDB not available. Running in limited mode.');
-    console.log('   Check if MONGODB_URI is correct in Vercel environment variables.');
-    console.log('   Also check if you have whitelisted 0.0.0.0/0 in MongoDB Atlas.');
-  }
-
-
-};
 
 connectDB();
 
@@ -69,6 +43,7 @@ app.get('/api/leads', async (req, res) => {
       limit = 50,
       search,
       status,
+      messageStatus,
       source,
       isHotLead,
       sortBy = 'createdAt',
@@ -87,6 +62,7 @@ app.get('/api/leads', async (req, res) => {
     }
 
     if (status) query.status = status;
+    if (messageStatus) query.messageStatus = messageStatus;
     if (source) query.source = source;
     if (isHotLead === 'true') query.isHotLead = true;
 
@@ -115,6 +91,24 @@ app.get('/api/leads', async (req, res) => {
         },
       },
     });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get hot leads
+app.get('/api/leads/hot', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.json({ success: true, data: { leads: [] } });
+    }
+
+    const leads = await Lead.find({ isHotLead: true, status: { $ne: 'won' } })
+      .sort({ rating: -1, createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    res.json({ success: true, data: { leads } });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -201,6 +195,84 @@ app.delete('/api/leads/bulk/delete', async (req, res) => {
     const { ids } = req.body;
     const result = await Lead.deleteMany({ _id: { $in: ids } });
     res.json({ success: true, data: { deletedCount: result.deletedCount } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// CAMPAIGN ROUTES
+// ============================================
+
+app.post('/api/campaigns', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Campaign name is required' });
+    }
+    const campaign = await createCampaign(name);
+    res.status(201).json({ success: true, data: { campaign } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/campaigns', async (_req, res) => {
+  try {
+    const campaigns = await Campaign.find().sort({ createdAt: -1 }).lean();
+    res.json({ success: true, data: { campaigns } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/campaigns/:id', async (req, res) => {
+  try {
+    const campaign = await Campaign.findById(req.params.id).lean();
+    if (!campaign) {
+      return res.status(404).json({ success: false, error: 'Campaign not found' });
+    }
+
+    const stats = await CampaignLead.aggregate([
+      { $match: { campaignId: campaign._id } },
+      { $group: { _id: '$messageStatus', count: { $sum: 1 } } },
+    ]);
+
+    res.json({ success: true, data: { campaign, stats } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/campaigns/:id/leads', async (req, res) => {
+  try {
+    const { leadIds } = req.body;
+    if (!Array.isArray(leadIds) || leadIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'leadIds array is required' });
+    }
+    const result = await addLeadsToCampaign(req.params.id, leadIds);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/campaigns/:id/leads', async (req, res) => {
+  try {
+    const leads = await CampaignLead.find({ campaignId: req.params.id })
+      .populate('leadId')
+      .lean();
+    res.json({ success: true, data: { leads } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/campaigns/:id/start', async (req, res) => {
+  try {
+    const includeImage = Boolean(req.body?.includeImage ?? true);
+    const queued = await enqueueCampaignLeads(req.params.id, includeImage);
+    res.json({ success: true, data: { queued } });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -722,24 +794,6 @@ app.get('/api/analytics/overview', async (req, res) => {
         recentLeads,
       },
     });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Get hot leads
-app.get('/api/leads/hot', async (req, res) => {
-  try {
-    if (mongoose.connection.readyState !== 1) {
-      return res.json({ success: true, data: { leads: [] } });
-    }
-
-    const leads = await Lead.find({ isHotLead: true, status: { $ne: 'won' } })
-      .sort({ rating: -1, createdAt: -1 })
-      .limit(50)
-      .lean();
-
-    res.json({ success: true, data: { leads } });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

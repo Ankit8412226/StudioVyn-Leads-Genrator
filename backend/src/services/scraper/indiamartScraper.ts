@@ -1,4 +1,9 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
+import { Page } from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+
+// Use stealth plugin
+puppeteer.use(StealthPlugin());
 
 export interface IndiaMartLead {
   businessName: string;
@@ -25,25 +30,26 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
  * IndiaMART Scraper - B2B leads with emails (no website preferred)
  */
 export class IndiaMartScraper {
-  private browser: Browser | null = null;
+  private browser: any = null;
   private page: Page | null = null;
 
   async init(): Promise<void> {
-    console.log('🚀 Starting IndiaMART browser...');
+    console.log('🚀 Starting IndiaMART browser with Stealth mode...');
     this.browser = await puppeteer.launch({
       headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
         '--window-size=1920,1080',
       ],
     });
 
     this.page = await this.browser.newPage();
-    await this.page.setViewport({ width: 1920, height: 1080 });
-    await this.page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    await this.page!.setViewport({ width: 1920, height: 1080 });
+    await this.page!.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
     );
   }
 

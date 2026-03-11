@@ -4,6 +4,10 @@ import mongoose, { Document, Schema } from 'mongoose';
 export const LEAD_STATUSES = ['new', 'contacted', 'interested', 'qualified', 'won', 'lost'] as const;
 export type LeadStatus = typeof LEAD_STATUSES[number];
 
+// Message Statuses
+export const MESSAGE_STATUSES = ['pending', 'sent', 'failed'] as const;
+export type MessageStatus = typeof MESSAGE_STATUSES[number];
+
 // Lead Sources
 export const LEAD_SOURCES = [
   'google_maps',
@@ -12,6 +16,7 @@ export const LEAD_SOURCES = [
   'manual',
   'justdial',
   'indiamart',
+  'yelp',
   'other',
 ] as const;
 export type LeadSource = typeof LEAD_SOURCES[number];
@@ -54,6 +59,8 @@ export interface ILead extends Document {
   // Tracking
   lastContactedAt?: Date;
   nextFollowUpAt?: Date;
+  messageStatus?: MessageStatus;
+  attemptCount?: number;
 
   // AI Analysis
   aiScore?: number;
@@ -108,8 +115,10 @@ const LeadSchema = new Schema<ILead>(
     lastNote: { type: String },
 
     // Tracking
-    lastContactedAt: { type: Date },
+    lastContactedAt: { type: Date, alias: 'last_contacted_at' },
     nextFollowUpAt: { type: Date, index: true },
+    messageStatus: { type: String, enum: MESSAGE_STATUSES, default: 'pending', index: true, alias: 'message_status' },
+    attemptCount: { type: Number, default: 0, alias: 'attempt_count' },
 
     // AI Analysis
     aiScore: { type: Number },
@@ -131,6 +140,7 @@ const LeadSchema = new Schema<ILead>(
 LeadSchema.index({ status: 1, createdAt: -1 });
 LeadSchema.index({ source: 1, createdAt: -1 });
 LeadSchema.index({ isHotLead: 1, status: 1 });
+LeadSchema.index({ messageStatus: 1, lastContactedAt: -1 });
 LeadSchema.index({ fullName: 'text', businessName: 'text', email: 'text' });
 
 // Mark as hot lead if high rating and has phone
