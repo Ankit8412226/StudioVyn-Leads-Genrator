@@ -15,8 +15,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-const API_URL = 'https://studiovyn-leads-genrator.onrender.com/api';
-const SCRAPER_API_URL = 'http://localhost:5000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+const SCRAPER_API_URL = API_URL;
 
 async function fetchAPI(endpoint: string, options?: RequestInit) {
   const res = await fetch(`${API_URL}${endpoint}`, {
@@ -84,6 +84,8 @@ export default function Dashboard() {
   const [filter, setFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [scrapeForm, setScrapeForm] = useState({ query: '', location: '', limit: 30, source: 'google' as 'google' | 'india' | 'yelp' });
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [campaignRunning, setCampaignRunning] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -148,6 +150,69 @@ export default function Dashboard() {
       setLeads(leads.map((l) => (l._id === id ? { ...l, status } : l)));
     } catch (error) {
       console.error('Error updating status:', error);
+    }
+  };
+
+  const toggleSelectLead = (id: string) => {
+    setSelectedLeadIds((prev) => (
+      prev.includes(id) ? prev.filter((leadId) => leadId !== id) : [...prev, id]
+    ));
+  };
+
+  const selectAllFiltered = () => {
+    setSelectedLeadIds(filteredLeads.map((lead) => lead._id));
+  };
+
+  const clearSelection = () => {
+    setSelectedLeadIds([]);
+  };
+
+  const runCampaign = async () => {
+    if (selectedLeadIds.length === 0) {
+      alert('Select at least 1 lead to run a campaign.');
+      return;
+    }
+
+    const defaultName = `Campaign ${new Date().toLocaleString()}`;
+    const name = prompt('Campaign name', defaultName);
+    if (!name) return;
+
+    const includeImage = confirm('Include AI image in WhatsApp message?');
+
+    setCampaignRunning(true);
+    try {
+      const campaignRes = await fetchAPI('/campaigns', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      });
+      if (!campaignRes.success) {
+        throw new Error(campaignRes.error || 'Failed to create campaign');
+      }
+
+      const campaignId = campaignRes.data.campaign._id;
+
+      const addRes = await fetchAPI(`/campaigns/${campaignId}/leads`, {
+        method: 'POST',
+        body: JSON.stringify({ leadIds: selectedLeadIds }),
+      });
+      if (!addRes.success) {
+        throw new Error(addRes.error || 'Failed to add leads to campaign');
+      }
+
+      const startRes = await fetchAPI(`/campaigns/${campaignId}/start`, {
+        method: 'POST',
+        body: JSON.stringify({ includeImage }),
+      });
+      if (!startRes.success) {
+        throw new Error(startRes.error || 'Failed to start campaign');
+      }
+
+      alert(`Campaign started. ${startRes.data.queued} leads are being processed.`);
+      clearSelection();
+    } catch (error: any) {
+      alert(`Campaign failed: ${error.message}`);
+    } finally {
+      setCampaignRunning(false);
     }
   };
 
@@ -245,6 +310,29 @@ export default function Dashboard() {
               {f === 'hot' ? '🔥 Hot' : f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={selectAllFiltered}
+              disabled={filteredLeads.length === 0}
+              style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid #e2e8f0', background: 'white', cursor: filteredLeads.length === 0 ? 'not-allowed' : 'pointer', color: '#0f172a', fontWeight: 600, fontSize: 13 }}
+            >
+              Select All
+            </button>
+            <button
+              onClick={clearSelection}
+              disabled={selectedLeadIds.length === 0}
+              style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid #e2e8f0', background: 'white', cursor: selectedLeadIds.length === 0 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: 600, fontSize: 13 }}
+            >
+              Clear ({selectedLeadIds.length})
+            </button>
+            <button
+              onClick={runCampaign}
+              disabled={campaignRunning || selectedLeadIds.length === 0}
+              style={{ padding: '12px 18px', borderRadius: 10, border: 'none', background: campaignRunning || selectedLeadIds.length === 0 ? '#e2e8f0' : '#16a34a', color: campaignRunning || selectedLeadIds.length === 0 ? '#94a3b8' : 'white', fontWeight: 700, fontSize: 13, cursor: campaignRunning || selectedLeadIds.length === 0 ? 'not-allowed' : 'pointer', boxShadow: campaignRunning || selectedLeadIds.length === 0 ? 'none' : '0 6px 16px rgba(22,163,74,0.35)' }}
+            >
+              {campaignRunning ? 'Starting...' : 'Run Campaign'}
+            </button>
+          </div>
           <button onClick={fetchData} style={{ padding: 12, borderRadius: 10, border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer' }}>
             <RefreshCw style={{ width: 18, height: 18, color: '#64748b' }} />
           </button>
@@ -269,6 +357,7 @@ export default function Dashboard() {
               }
             };
             const sourceStyle = getSourceStyle(lead.source);
+            const isSelected = selectedLeadIds.includes(lead._id);
 
             return (
               <div key={lead._id} style={{ background: lead.isHotLead ? 'linear-gradient(135deg, #fef2f2 0%, #fff 100%)' : 'white', borderRadius: 16, padding: 24, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: lead.isHotLead ? '2px solid #fecaca' : '1px solid #e2e8f0', transition: 'transform 0.2s, box-shadow 0.2s' }}>
@@ -287,6 +376,15 @@ export default function Dashboard() {
                   }}>
                     {sourceStyle.icon} {sourceStyle.label}
                   </span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#0f172a', fontWeight: 600, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelectLead(lead._id)}
+                      style={{ width: 16, height: 16, accentColor: '#16a34a' }}
+                    />
+                    Select
+                  </label>
                   {lead.isHotLead && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600 }}>
                       <Flame style={{ width: 12, height: 12 }} /> Hot Lead

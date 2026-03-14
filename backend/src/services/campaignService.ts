@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { Campaign } from '../models/Campaign';
 import { CampaignLead } from '../models/CampaignLead';
 import { Lead } from '../models/Lead';
-import { messageQueue } from './messageQueue';
+import { processCampaignLead } from './campaignMessageService';
 import { logger } from '../utils/logger';
 
 export const createCampaign = async (name: string) => {
@@ -51,9 +51,12 @@ export const enqueueCampaignLeads = async (campaignId: string, includeImage: boo
     .lean();
 
   for (const lead of pendingLeads) {
-    await messageQueue.add({ campaignLeadId: lead._id.toString(), includeImage });
+    const id = lead._id.toString();
+    void processCampaignLead(id, includeImage).catch((err) => {
+      logger.error(`Direct send failed for ${id}: ${err.message}`);
+    });
   }
 
-  logger.info(`Enqueued ${pendingLeads.length} campaign leads for campaign ${campaignId}`);
+  logger.info(`Started ${pendingLeads.length} campaign leads for campaign ${campaignId} (no Redis)`);
   return pendingLeads.length;
 };

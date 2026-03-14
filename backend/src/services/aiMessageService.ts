@@ -1,4 +1,5 @@
 import { ILead } from '../models/Lead';
+import { delay } from '../utils/delay';
 import { logger } from '../utils/logger';
 
 const FIREWORKS_API_KEY = process.env.FIREWORKS_API_KEY ?? '';
@@ -6,6 +7,10 @@ const FIREWORKS_TEXT_MODEL = process.env.FIREWORKS_TEXT_MODEL ?? 'accounts/firew
 const FIREWORKS_CHAT_ENDPOINT = process.env.FIREWORKS_CHAT_ENDPOINT ?? 'https://api.fireworks.ai/inference/v1/chat/completions';
 
 const MAX_MESSAGE_CHARS = 300;
+const RETRY_DELAYS_MS = [2000, 5000, 10000];
+
+const isRetryableStatus = (status: number) =>
+  status === 408 || status === 429 || status >= 500;
 
 const buildPrompt = (lead: ILead) => {
   const businessName = lead.businessName || lead.fullName || 'the business';
@@ -33,29 +38,42 @@ export const generatePersonalizedMessage = async (lead: ILead): Promise<string> 
   try {
     const prompt = buildPrompt(lead);
 
-    const res = await fetch(FIREWORKS_CHAT_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${FIREWORKS_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: FIREWORKS_TEXT_MODEL,
-        messages: [
-          { role: 'system', content: 'You write concise, friendly WhatsApp outreach messages.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.6,
-        max_tokens: 160,
-      }),
-    });
+    let data: any | null = null;
+    let lastError: string | null = null;
 
-    if (!res.ok) {
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
+      const res = await fetch(FIREWORKS_CHAT_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${FIREWORKS_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: FIREWORKS_TEXT_MODEL,
+          messages: [
+            { role: 'system', content: 'You write concise, friendly WhatsApp outreach messages.' },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.6,
+          max_tokens: 160,
+        }),
+      });
+
+      if (res.ok) {
+        data = await res.json();
+        break;
+      }
+
       const errorText = await res.text();
-      throw new Error(`Fireworks chat error: ${res.status} ${errorText}`);
+      lastError = `Fireworks chat error: ${res.status} ${errorText}`;
+
+      if (!isRetryableStatus(res.status) || attempt === RETRY_DELAYS_MS.length) {
+        throw new Error(lastError);
+      }
+
+      await delay(RETRY_DELAYS_MS[attempt]);
     }
 
-    const data: any = await res.json();
     const message = data?.choices?.[0]?.message?.content?.trim();
 
     if (!message) {
