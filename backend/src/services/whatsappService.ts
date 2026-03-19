@@ -1,5 +1,7 @@
 import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
+import { CampaignLead } from '../models/CampaignLead';
+import { Lead } from '../models/Lead';
 import { logger } from '../utils/logger';
 
 let client: Client | null = null;
@@ -36,6 +38,52 @@ const initClient = () => {
 
   client.on('disconnected', (reason) => {
     logger.warn(`WhatsApp disconnected: ${reason}`);
+  });
+
+  client.on('message', async (message) => {
+    try {
+      if (message.fromMe) return;
+      const from = message.from || '';
+      if (!from.endsWith('@c.us')) return;
+      const digits = from.replace(/\D/g, '');
+      if (!digits) return;
+
+      const last10 = digits.slice(-10);
+      const phoneRegex = new RegExp(`${last10}$`);
+
+      const lead = await Lead.findOne({
+        $or: [
+          { phone: { $regex: phoneRegex } },
+          { alternatePhone: { $regex: phoneRegex } },
+        ],
+      }).sort({ updatedAt: -1 });
+
+      if (!lead) return;
+
+      const now = new Date();
+      lead.responseStatus = 'replied';
+      lead.respondedAt = now;
+      lead.lastInboundAt = now;
+      if (lead.status === 'new' || lead.status === 'contacted') {
+        lead.status = 'interested';
+      }
+      await lead.save();
+
+      const campaignLead = await CampaignLead.findOne({
+        leadId: lead._id,
+        messageStatus: 'sent',
+      }).sort({ updatedAt: -1 });
+
+      if (campaignLead) {
+        campaignLead.responseStatus = 'replied';
+        campaignLead.responseAt = now;
+        await campaignLead.save();
+      }
+
+      logger.info(`Inbound reply tracked for ${lead.businessName ?? lead.fullName}`);
+    } catch (err: any) {
+      logger.error(`Inbound message tracking failed: ${err.message}`);
+    }
   });
 
   clientReady = new Promise((resolve, reject) => {

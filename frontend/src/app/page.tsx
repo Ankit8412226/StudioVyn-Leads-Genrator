@@ -63,6 +63,11 @@ interface Lead {
   aiConversionProbability?: number;
   aiPainPoints?: string[];
   aiIdealSolution?: string;
+  aiLandingHeadline?: string;
+  aiLandingSubhead?: string;
+  aiLandingBullets?: string[];
+  aiLandingCta?: string;
+  heroImagePath?: string;
   createdAt: string;
 }
 
@@ -75,8 +80,21 @@ interface Stats {
   conversionRate: string | number;
 }
 
+interface MessageVariantStat {
+  variant: 'A' | 'B';
+  sent: number;
+  replied: number;
+}
+
+interface AnalyticsExtras {
+  messageVariantStats: MessageVariantStat[];
+  followUpStats: Record<string, number>;
+  followUp2Stats: Record<string, number>;
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsExtras | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState(false);
@@ -94,7 +112,14 @@ export default function Dashboard() {
         fetchAPI('/analytics/overview'),
         fetchAPI('/leads?limit=100&sortBy=createdAt&sortOrder=desc'),
       ]);
-      if (statsRes.success) setStats(statsRes.data.stats);
+      if (statsRes.success) {
+        setStats(statsRes.data.stats);
+        setAnalytics({
+          messageVariantStats: statsRes.data.messageVariantStats || [],
+          followUpStats: statsRes.data.followUpStats || {},
+          followUp2Stats: statsRes.data.followUp2Stats || {},
+        });
+      }
       if (leadsRes.success) setLeads(leadsRes.data.leads);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -289,6 +314,60 @@ export default function Dashboard() {
           ))}
         </div>
 
+        {/* Message Performance */}
+        {analytics && (
+          <div style={{ marginBottom: 32 }}>
+            <h2 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>Message Performance</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+              {(['A', 'B'] as const).map((variant) => {
+                const stat = analytics.messageVariantStats.find((s) => s.variant === variant) || { sent: 0, replied: 0 };
+                const replyRate = stat.sent > 0 ? Math.round((stat.replied / stat.sent) * 100) : 0;
+                return (
+                  <div key={variant} style={{ background: 'white', borderRadius: 14, padding: 18, border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                    <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, letterSpacing: 1 }}>VARIANT {variant}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 20, fontWeight: 700 }}>{stat.sent}</div>
+                        <div style={{ fontSize: 12, color: '#94a3b8' }}>Sent</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 20, fontWeight: 700 }}>{stat.replied}</div>
+                        <div style={{ fontSize: 12, color: '#94a3b8' }}>Replied</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 20, fontWeight: 700 }}>{replyRate}%</div>
+                        <div style={{ fontSize: 12, color: '#94a3b8' }}>Reply Rate</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Follow-up Status */}
+        {analytics && (
+          <div style={{ marginBottom: 32 }}>
+            <h2 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>Follow-up Status</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+              {[
+                { label: 'Follow-up 1 Pending', value: analytics.followUpStats.pending || 0 },
+                { label: 'Follow-up 1 Sent', value: analytics.followUpStats.sent || 0 },
+                { label: 'Follow-up 1 Failed', value: analytics.followUpStats.failed || 0 },
+                { label: 'Follow-up 2 Pending', value: analytics.followUp2Stats.pending || 0 },
+                { label: 'Follow-up 2 Sent', value: analytics.followUp2Stats.sent || 0 },
+                { label: 'Follow-up 2 Failed', value: analytics.followUp2Stats.failed || 0 },
+              ].map((item) => (
+                <div key={item.label} style={{ background: 'white', borderRadius: 14, padding: 18, border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                  <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, letterSpacing: 0.5 }}>{item.label}</div>
+                  <div style={{ marginTop: 8, fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Filters */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24, alignItems: 'center' }}>
           <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
@@ -453,6 +532,9 @@ export default function Dashboard() {
                       📧 Email
                     </a>
                   )}
+                  <a href={`/demo/${lead._id}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, background: '#f1f5f9', color: '#0f172a', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
+                    🧪 Demo Page
+                  </a>
                 </div>
 
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8' }}>

@@ -7,6 +7,8 @@ export type LeadStatus = typeof LEAD_STATUSES[number];
 // Message Statuses
 export const MESSAGE_STATUSES = ['pending', 'sent', 'failed'] as const;
 export type MessageStatus = typeof MESSAGE_STATUSES[number];
+export const RESPONSE_STATUSES = ['none', 'replied'] as const;
+export type ResponseStatus = typeof RESPONSE_STATUSES[number];
 
 // Lead Sources
 export const LEAD_SOURCES = [
@@ -61,6 +63,9 @@ export interface ILead extends Document {
   nextFollowUpAt?: Date;
   messageStatus?: MessageStatus;
   attemptCount?: number;
+  responseStatus?: ResponseStatus;
+  respondedAt?: Date;
+  lastInboundAt?: Date;
 
   // AI Analysis
   aiScore?: number;
@@ -72,6 +77,11 @@ export interface ILead extends Document {
   aiConversionProbability?: number;
   aiPainPoints?: string[];
   aiIdealSolution?: string;
+  aiLandingHeadline?: string;
+  aiLandingSubhead?: string;
+  aiLandingBullets?: string[];
+  aiLandingCta?: string;
+  heroImagePath?: string;
 
   // Timestamps
   createdAt: Date;
@@ -119,6 +129,9 @@ const LeadSchema = new Schema<ILead>(
     nextFollowUpAt: { type: Date, index: true },
     messageStatus: { type: String, enum: MESSAGE_STATUSES, default: 'pending', index: true, alias: 'message_status' },
     attemptCount: { type: Number, default: 0, alias: 'attempt_count' },
+    responseStatus: { type: String, enum: RESPONSE_STATUSES, default: 'none', index: true },
+    respondedAt: { type: Date },
+    lastInboundAt: { type: Date },
 
     // AI Analysis
     aiScore: { type: Number },
@@ -130,6 +143,11 @@ const LeadSchema = new Schema<ILead>(
     aiConversionProbability: { type: Number },
     aiPainPoints: [{ type: String }],
     aiIdealSolution: { type: String },
+    aiLandingHeadline: { type: String },
+    aiLandingSubhead: { type: String },
+    aiLandingBullets: [{ type: String }],
+    aiLandingCta: { type: String },
+    heroImagePath: { type: String },
   },
   {
     timestamps: true,

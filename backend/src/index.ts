@@ -2,11 +2,14 @@ import cors from 'cors';
 import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
+import path from 'path';
 import { connectDB } from './db';
 import { Campaign } from './models/Campaign';
 import { CampaignLead } from './models/CampaignLead';
-import { Lead } from './models/Lead';
+import { ILead, Lead } from './models/Lead';
 import { addLeadsToCampaign, createCampaign, enqueueCampaignLeads } from './services/campaignService';
+import { generateLeadInsights } from './services/aiLeadAnalysisService';
+import { processDueFollowUps } from './services/followUpService';
 import { scrapeGoogleMaps } from './services/scraper/googleMapsScraper';
 import { IndiaMartLead, scrapeIndiaMART } from './services/scraper/indiamartScraper';
 import { JustDialLead, scrapeJustDial } from './services/scraper/justDialScraper';
@@ -15,6 +18,10 @@ import { scrapeYelp, YelpLead } from './services/scraper/yelpScraper';
 const app = express();
 const PORT = process.env.PORT || 5000;
 const IS_VERCEL = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
+const GENERATED_ASSETS_DIR = process.env.GENERATED_ASSETS_DIR
+  ?? path.join(process.cwd(), 'generated-assets');
+const ENABLE_FOLLOW_UP_SCHEDULER = (process.env.ENABLE_FOLLOW_UP_SCHEDULER ?? 'true') === 'true';
+const FOLLOW_UP_POLL_INTERVAL_SEC = Number(process.env.FOLLOW_UP_POLL_INTERVAL_SEC ?? '60');
 
 
 // Middleware
@@ -25,8 +32,29 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
+app.use('/generated-assets', express.static(GENERATED_ASSETS_DIR));
 
 connectDB();
+
+if (!IS_VERCEL && ENABLE_FOLLOW_UP_SCHEDULER) {
+  const intervalMs = Math.max(FOLLOW_UP_POLL_INTERVAL_SEC, 15) * 1000;
+  setInterval(() => {
+    void processDueFollowUps(10).catch((err) => {
+      console.error(`❌ Follow-up scheduler error: ${err.message}`);
+    });
+  }, intervalMs);
+}
+
+const enrichLeadWithInsights = async (lead: ILead) => {
+  const insights = await generateLeadInsights(lead);
+  lead.aiPainPoints = insights.painPoints;
+  lead.aiOutreachAngle = insights.outreachAngle;
+  lead.aiIdealSolution = insights.idealSolution;
+  lead.aiLandingHeadline = insights.landingHeadline;
+  lead.aiLandingSubhead = insights.landingSubhead;
+  lead.aiLandingBullets = insights.landingBullets;
+  lead.aiLandingCta = insights.demoCta;
+};
 
 
 app.get('/api/leads', async (req, res) => {
@@ -339,6 +367,12 @@ app.post('/api/scraper/google-maps', async (req, res) => {
             priority: isHot ? 'high' : 'medium',
           });
 
+          try {
+            await enrichLeadWithInsights(lead);
+          } catch (insightError: any) {
+            console.error(`⚠️ Insight error for "${scraped.businessName}":`, insightError.message);
+          }
+
           await lead.save();
           savedCount++;
           if (lead.isHotLead) hotLeadCount++;
@@ -434,6 +468,11 @@ app.post('/api/scraper/india', async (req, res) => {
             isHotLead: !!(scraped.rating && scraped.rating >= 4.0),
             priority: (scraped.rating && scraped.rating >= 4.0) ? 'high' : 'medium',
           });
+          try {
+            await enrichLeadWithInsights(lead);
+          } catch (insightError: any) {
+            console.error(`⚠️ Insight error for "${scraped.businessName}":`, insightError.message);
+          }
           await lead.save();
           savedCount++;
         } catch (err) { /* skip */ }
@@ -495,6 +534,11 @@ app.post('/api/scraper/yelp', async (req, res) => {
             isHotLead: !!(scraped.rating && scraped.rating >= 4.0),
             priority: (scraped.rating && scraped.rating >= 4.0) ? 'high' : 'medium',
           });
+          try {
+            await enrichLeadWithInsights(lead);
+          } catch (insightError: any) {
+            console.error(`⚠️ Insight error for "${scraped.businessName}":`, insightError.message);
+          }
           await lead.save();
           savedCount++;
         } catch (err) { /* skip */ }
@@ -686,6 +730,12 @@ app.post('/api/scraper/all-sources', async (req, res) => {
             priority: isHot ? 'high' : 'medium',
           });
 
+          try {
+            await enrichLeadWithInsights(lead);
+          } catch (insightError: any) {
+            console.error(`⚠️ Insight error for "${scraped.businessName}":`, insightError.message);
+          }
+
           await lead.save();
           savedCount++;
           if (lead.isHotLead) hotLeadCount++;
@@ -742,6 +792,9 @@ app.get('/api/analytics/overview', async (req, res) => {
           stats: { totalLeads: 0, hotLeads: 0, newLeads: 0, contactedLeads: 0, wonLeads: 0, conversionRate: 0 },
           sourceBreakdown: [],
           statusBreakdown: {},
+          messageVariantStats: [],
+          followUpStats: {},
+          followUp2Stats: {},
           recentLeads: [],
         },
       });
@@ -770,6 +823,26 @@ app.get('/api/analytics/overview', async (req, res) => {
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]);
 
+    const messageVariantStats = await CampaignLead.aggregate([
+      { $match: { messageStatus: 'sent' } },
+      {
+        $group: {
+          _id: '$messageVariant',
+          sent: { $sum: 1 },
+          replied: { $sum: { $cond: [{ $eq: ['$responseStatus', 'replied'] }, 1, 0] } },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    const followUpStats = await CampaignLead.aggregate([
+      { $group: { _id: '$followUpStatus', count: { $sum: 1 } } },
+    ]);
+
+    const followUp2Stats = await CampaignLead.aggregate([
+      { $group: { _id: '$followUp2Status', count: { $sum: 1 } } },
+    ]);
+
     const recentLeads = await Lead.find()
       .sort({ createdAt: -1 })
       .limit(10)
@@ -789,6 +862,19 @@ app.get('/api/analytics/overview', async (req, res) => {
         sourceBreakdown: sourceBreakdown.map((s) => ({ source: s._id, count: s.count })),
         statusBreakdown: statusBreakdown.reduce((acc, s) => {
           acc[s._id] = s.count;
+          return acc;
+        }, {} as Record<string, number>),
+        messageVariantStats: messageVariantStats.map((s) => ({
+          variant: s._id ?? 'A',
+          sent: s.sent ?? 0,
+          replied: s.replied ?? 0,
+        })),
+        followUpStats: followUpStats.reduce((acc, s) => {
+          acc[s._id ?? 'unknown'] = s.count;
+          return acc;
+        }, {} as Record<string, number>),
+        followUp2Stats: followUp2Stats.reduce((acc, s) => {
+          acc[s._id ?? 'unknown'] = s.count;
           return acc;
         }, {} as Record<string, number>),
         recentLeads,
