@@ -31,34 +31,44 @@ const sanitizeFilename = (value: string) =>
 
 const getCategoryVisuals = (category: string): string => {
   const cat = category.toLowerCase();
+  
   if (cat.includes('ca') || cat.includes('chartered') || cat.includes('accountant') || cat.includes('tax') || cat.includes('gst') || cat.includes('audit')) {
-    return 'sophisticated financial office, marble desk, gold pen, legal documents, trust and authority aesthetic, deep navy and gold color palette';
+    return 'a clean professional accountant desk with a high-end laptop showing a modern financial dashboard and tax website, leather notebook, calculator, glasses, trust and growth aesthetic';
   }
+  
   if (cat.includes('dental') || cat.includes('clinic') || cat.includes('doctor') || cat.includes('medical') || cat.includes('health')) {
-    return 'pristine modern clinic interior, white and mint green, advanced medical equipment, clean sterile environment, trust and care aesthetic';
+    return 'a pristine doctor office desk with a modern tablet showing a patient booking website, stethoscope next to the tablet, clean medical interior background, professional and caring';
   }
+  
   if (cat.includes('restaurant') || cat.includes('cafe') || cat.includes('food') || cat.includes('bakery')) {
-    return 'upscale restaurant ambience, warm moody lighting, gourmet food styling, bokeh background, rich earthy tones, appetizing and luxurious';
+    return 'a rustic wooden restaurant table with a premium tablet showing a beautiful food menu and ordering website, a fresh coffee cup and a small plant, warm lighting, inviting and modern';
   }
+  
   if (cat.includes('salon') || cat.includes('beauty') || cat.includes('spa') || cat.includes('hair')) {
-    return 'elegant beauty salon interior, rose gold accents, professional styling chair, soft diffused lighting, luxury pampering aesthetic';
+    return 'a chic salon counter with a sleek laptop showing a beauty booking and services website, premium hair products in background, soft elegant lighting, stylish and professional';
   }
+  
   if (cat.includes('gym') || cat.includes('fitness') || cat.includes('yoga') || cat.includes('wellness')) {
-    return 'premium fitness studio, dramatic motivational lighting, modern equipment, energy and vitality, dark background with neon accents';
+    return 'a modern gym reception desk with a tablet showing a fitness membership and class schedule website, gym water bottle and protein shaker next to it, high-energy gym background, clean and motivational';
   }
+  
   if (cat.includes('real estate') || cat.includes('property') || cat.includes('builder') || cat.includes('architect')) {
-    return 'stunning luxury property exterior at golden hour, clean architectural lines, lush landscaping, aspirational lifestyle aesthetic';
+    return 'a designer architectural desk with a large tablet showing a luxury property listing website, blueprints and architectural tools nearby, high-end office background, success and growth';
   }
+  
   if (cat.includes('legal') || cat.includes('advocate') || cat.includes('lawyer') || cat.includes('attorney')) {
-    return 'prestigious law office, mahogany desk, legal books, scales of justice, power and authority, deep burgundy and gold tones';
+    return 'a prestigious law office desk with a premium laptop showing a professional legal services website, legal gavel and books in background, classic and authoritative';
   }
+  
   if (cat.includes('school') || cat.includes('academy') || cat.includes('education') || cat.includes('tutor') || cat.includes('coaching')) {
-    return 'bright modern classroom, engaged students, digital learning boards, inspiring educational environment, vibrant and welcoming';
+    return 'a bright modern student desk with a tablet showing an educational platform and course website, books and stationery, inspiring and vibrant';
   }
+  
   if (cat.includes('tech') || cat.includes('software') || cat.includes('it') || cat.includes('digital')) {
-    return 'futuristic tech workspace, multiple monitors with code, ambient purple and blue neon lighting, innovation and precision aesthetic';
+    return 'a high-tech developer desk with a premium monitor showing a modern software landing page, neon ambient lighting, mechanical keyboard, precision and innovation';
   }
-  return 'premium modern business office, glass and steel architecture, professional team silhouettes, cinematic wide angle, success and growth aesthetic';
+  
+  return 'a professional business desk with a high-end laptop showing a modern company landing page, coffee cup, notebook, success and growth aesthetic';
 };
 
 const buildPrompt = (lead: ILead) => {
@@ -66,15 +76,13 @@ const buildPrompt = (lead: ILead) => {
   const city = lead.city || '';
   const categoryVisuals = getCategoryVisuals(category);
 
-  return `Ultra-premium marketing hero banner for a ${category} business${city ? ` in ${city}` : ''}. ` +
-    `Visual style: ${categoryVisuals}. ` +
-    `Photorealistic, 8K quality, award-winning advertising photography. ` +
-    `Cinematic depth of field, professional studio lighting with dramatic shadows and highlights. ` +
-    `Rich color grading, magazine cover quality. ` +
-    `Wide 16:9 hero banner composition with clear focal point on left third. ` +
-    `Subtle gradient overlay on right side creating space for text. ` +
-    `Premium luxury brand aesthetic, high-end and trustworthy. ` +
-    `NO text, NO watermarks, NO logos. Hyper realistic, ultra detailed.`;
+  return `A classic, professional marketing photo of ${categoryVisuals}. ` +
+    `The screen clearly shows a stunning, modern website layout designed for a ${category} in ${city}. ` +
+    `Photorealistic, 8K, high-end commercial photography. ` +
+    `Focus is sharp on the device screen showing the website. ` +
+    `Atmosphere of business growth, improvement, and modernization. ` +
+    `Cinematic lighting, warm and trustworthy colors. ` +
+    `NO distorted text, NO messy artifacts. Ultra detailed, magazine quality.`;
 };
 
 export const generateHeroImage = async (lead: ILead): Promise<string | null> => {

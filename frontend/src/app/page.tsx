@@ -13,7 +13,13 @@ import {
   Trophy,
   Trash2,
   Users,
-  X
+  X,
+  ExternalLink,
+  ChevronRight,
+  TrendingUp,
+  Layout,
+  Zap,
+  Sparkles
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -106,6 +112,8 @@ export default function Dashboard() {
   const [scrapeForm, setScrapeForm] = useState({ query: '', location: '', limit: 30, source: 'google' as 'google' | 'india' | 'yelp' });
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [campaignRunning, setCampaignRunning] = useState(false);
+  const [selectedLeadForDetail, setSelectedLeadForDetail] = useState<Lead | null>(null);
+  const [leadDetailOpen, setLeadDetailOpen] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -628,23 +636,20 @@ export default function Dashboard() {
                 )}
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                  {lead.phone && (
-                    <>
-                      <a href={`tel:${lead.phone}`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, background: '#eff6ff', color: '#2563eb', fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>
-                        <Phone style={{ width: 16, height: 16 }} /> Call
-                      </a>
-                      <a href={getWhatsAppLink(lead.phone)} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, background: '#dcfce7', color: '#16a34a', fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>
-                        <MessageSquare style={{ width: 16, height: 16 }} /> WhatsApp
-                      </a>
-                    </>
-                  )}
-                  {lead.email && (
-                    <a href={`mailto:${lead.email}`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, background: '#fef3c7', color: '#d97706', fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>
-                      📧 Email
-                    </a>
-                  )}
-                  <a href={`/demo/${lead._id}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, background: '#f1f5f9', color: '#0f172a', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
-                    🧪 Demo Page
+                  <button
+                    onClick={() => {
+                      setSelectedLeadForDetail(lead);
+                      setLeadDetailOpen(true);
+                    }}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 16px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,0.3)', transition: 'all 0.2s' }}
+                  >
+                    <Sparkles style={{ width: 16, height: 16 }} /> Website Pitch
+                  </button>
+                  <a href={getWhatsAppLink(lead.phone || '')} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 12, border: '1px solid #dcfce7', background: '#f0fdf4', color: '#16a34a', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
+                    <MessageSquare style={{ width: 16, height: 16 }} />
+                  </a>
+                  <a href={`/demo/${lead._id}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 12, border: '1px solid #e2e8f0', background: 'white', color: '#0f172a', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
+                    <ExternalLink style={{ width: 16, height: 16 }} /> Demo
                   </a>
                 </div>
 
@@ -671,6 +676,148 @@ export default function Dashboard() {
             </div>
           )
         }
+
+        {/* Lead Detail / Pitch Modal */}
+        {leadDetailOpen && selectedLeadForDetail && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(12px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div style={{ background: 'white', width: '100%', maxWidth: 1000, maxHeight: '90vh', borderRadius: 28, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.2)' }}>
+              {/* Close Button */}
+              <button onClick={() => setLeadDetailOpen(false)} style={{ position: 'absolute', top: 24, right: 24, zIndex: 10, background: 'white', border: '1px solid #e2e8f0', width: 44, height: 44, borderRadius: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', transition: 'transform 0.2s' }}>
+                <X style={{ width: 22, height: 22, color: '#0f172a' }} />
+              </button>
+
+              <div style={{ flex: 1, overflowY: 'auto', padding: '40px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 40 }}>
+                  
+                  {/* Left Side: Preview & AI Insights */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                      <span style={{ background: '#fef2f2', color: '#dc2626', padding: '6px 14px', borderRadius: 20, fontSize: 10, fontWeight: 800, letterSpacing: 1 }}>{selectedLeadForDetail.isHotLead ? 'HIGH PRIORITY 🔥' : 'READY TO PITCH'}</span>
+                      <span style={{ color: '#64748b', fontSize: 14, fontWeight: 500 }}>{selectedLeadForDetail.category} · {selectedLeadForDetail.city}</span>
+                    </div>
+
+                    <h2 style={{ fontSize: 36, fontWeight: 900, color: '#0f172a', marginBottom: 16, lineHeight: 1.1, letterSpacing: -1 }}>{selectedLeadForDetail.businessName || selectedLeadForDetail.fullName}</h2>
+                    <p style={{ fontSize: 16, color: '#475569', lineHeight: 1.6, marginBottom: 28 }}>{selectedLeadForDetail.aiPotential || 'This business has great ratings but no modern landing page. They are missing out on mobile-first customers in their local area.'}</p>
+
+                    {/* Image Preview Block */}
+                    {selectedLeadForDetail.heroImagePath && (
+                      <div style={{ marginBottom: 32, borderRadius: 20, overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 12px 30px -10px rgba(0,0,0,0.15)' }}>
+                        <div style={{ background: '#f8fafc', padding: '10px 20px', fontSize: 11, fontWeight: 800, color: '#64748b', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>🎨 GENERATED HERO BANNER</span>
+                          <span style={{ color: '#6366f1' }}>PREMIUM QUALITY</span>
+                        </div>
+                        <img
+                          src={`${API_URL.replace(/\/api$/, '')}${selectedLeadForDetail.heroImagePath}`}
+                          alt="AI Mockup"
+                          style={{ width: '100%', height: 'auto', display: 'block' }}
+                        />
+                      </div>
+                    )}
+
+                    {/* AI Strategy Pills */}
+                    <div style={{ background: '#f0fdf4', borderRadius: 20, padding: 24, border: '1px solid #bbf7d0' }}>
+                      <h4 style={{ margin: '0 0 16px', fontSize: 13, fontWeight: 800, color: '#166534', letterSpacing: 0.5 }}>🎯 WHY THEY NEED A WEBSITE</h4>
+                      <div style={{ display: 'grid', gap: 12 }}>
+                        {(selectedLeadForDetail.aiPainPoints || ['Boost conversion from Google Maps', 'Automate WhatsApp inquiries']).map((p, i) => (
+                          <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 14, color: '#14532d', fontWeight: 500 }}>
+                            <Zap style={{ width: 14, height: 14, color: '#16a34a', flexShrink: 0 }} /> {p}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Side: Pitch Templates */}
+                  <div>
+                    <div style={{ padding: '0 0 24px' }}>
+                      <h3 style={{ fontSize: 24, fontWeight: 900, color: '#0f172a', marginBottom: 8 }}>Website Pitch Options</h3>
+                      <p style={{ fontSize: 14, color: '#64748b' }}>Pick a strategy to reach out to this lead.</p>
+                    </div>
+
+                    <div style={{ display: 'grid', gap: 20 }}>
+                      
+                      {/* Pitch 1: ROI Focus */}
+                      <div style={{ background: '#faf5ff', borderRadius: 24, padding: 24, border: '1px solid #e9d5ff', position: 'relative' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                           <span style={{ background: '#7c3aed', color: 'white', padding: '4px 12px', borderRadius: 8, fontSize: 10, fontWeight: 800 }}>GROWTH FACTOR 📈</span>
+                          <TrendingUp style={{ width: 20, height: 20, color: '#7c3aed' }} />
+                        </div>
+                        <h4 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 800 }}>Option 1: The "Digital Growth" Pitch</h4>
+                        <p style={{ margin: '0 0 20px', fontSize: 13, color: '#5b21b6', lineHeight: 1.5 }}>Show them how a modern website acts as an automated growth engine, capturing local leads 24/7 while they sleep.</p>
+                        <button
+                          onClick={() => {
+                            const msg = `Hi ${selectedLeadForDetail.businessName}! I'm a local web strategist helping ${selectedLeadForDetail.category} businesses in ${selectedLeadForDetail.city} modernize. I noticed you have great reviews but no mobile home yet. I've designed a modern growth-focused mockup for you: ${window.location.origin}/demo/${selectedLeadForDetail._id}. It's built to turn your map views into booked appointments. Worth a quick chat?`;
+                            window.open(`https://wa.me/${(selectedLeadForDetail.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+                          }}
+                          style={{ width: '100%', padding: '14px', borderRadius: 14, border: 'none', background: '#7c3aed', color: 'white', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 12px rgba(124,58,237,0.3)' }}
+                        >
+                          Send Growth Pitch
+                        </button>
+                      </div>
+
+                      {/* Pitch 2: Trust Builder */}
+                      <div style={{ background: '#fffbeb', borderRadius: 24, padding: 24, border: '1px solid #fde68a' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                          <span style={{ background: '#d97706', color: 'white', padding: '4px 12px', borderRadius: 8, fontSize: 10, fontWeight: 800 }}>TRUST FACTOR ⭐</span>
+                          <Star style={{ width: 20, height: 20, color: '#d97706' }} />
+                        </div>
+                        <h4 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 800 }}>Option 2: The "Modern Authority" Pitch</h4>
+                        <p style={{ margin: '0 0 20px', fontSize: 13, color: '#92400e', lineHeight: 1.5 }}>Focus on bringing their {selectedLeadForDetail.rating} star reputation into the modern era with a professional digital presence.</p>
+                        <button
+                          onClick={() => {
+                            const msg = `Hi ${selectedLeadForDetail.businessName}! I love the ${selectedLeadForDetail.rating} star service you provide to ${selectedLeadForDetail.city}. Businesses of your quality deserve a professional digital home to match. I've already started a modern website layout for you here: ${window.location.origin}/demo/${selectedLeadForDetail._id}. Let me know if you'd like to see how we can modernize your brands presence together!`;
+                            window.open(`https://wa.me/${(selectedLeadForDetail.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+                          }}
+                          style={{ width: '100%', padding: '14px', borderRadius: 14, border: 'none', background: '#d97706', color: 'white', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 12px rgba(217,119,6,0.3)' }}
+                        >
+                          Send Authority Pitch
+                        </button>
+                      </div>
+
+                      {/* Pitch 3: Modern Look */}
+                      <div style={{ background: '#f0fdfa', borderRadius: 24, padding: 24, border: '1px solid #99f6e4' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                          <span style={{ background: '#0d9488', color: 'white', padding: '4px 12px', borderRadius: 8, fontSize: 10, fontWeight: 800 }}>EFFICIENCY FACTOR 🎨</span>
+                          <Layout style={{ width: 20, height: 20, color: '#0d9488' }} />
+                        </div>
+                        <h4 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 800 }}>Option 3: The "Streamlined Business" Pitch</h4>
+                        <p style={{ margin: '0 0 20px', fontSize: 13, color: '#115e59', lineHeight: 1.5 }}>Sell the efficiency of a website that handles inquiries while they focus on their core business work.</p>
+                        <button
+                          onClick={() => {
+                            const msg = `Hi ${selectedLeadForDetail.businessName}! I'm helping local ${selectedLeadForDetail.category} firms streamline their business with modern landing pages. A good site handles the FAQs so you can focus on the work. Built a custom, high-speed mockup for you to check out: ${window.location.origin}/demo/${selectedLeadForDetail._id}. Would love to help you modernize!`;
+                            window.open(`https://wa.me/${(selectedLeadForDetail.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+                          }}
+                          style={{ width: '100%', padding: '14px', borderRadius: 14, border: 'none', background: '#0d9488', color: 'white', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 12px rgba(13,148,136,0.3)' }}
+                        >
+                          Send Efficiency Pitch
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div style={{ background: '#f8fafc', padding: '24px 40px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ fontSize: 13, color: '#64748b' }}>
+                    Dashboard powered by <strong>Studiovyn AI</strong>
+                  </div>
+                  <div style={{ height: 16, width: 1, background: '#e2e8f0' }} />
+                  <a href={`/demo/${selectedLeadForDetail._id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: '#6366f1', fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    Open Live Demo <ChevronRight style={{ width: 14, height: 14 }} />
+                  </a>
+                </div>
+                <button
+                  onClick={() => setLeadDetailOpen(false)}
+                  style={{ padding: '10px 28px', borderRadius: 12, border: '1px solid #e2e8f0', background: 'white', color: '#0f172a', fontWeight: 700, fontSize: 14, cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Scraper Modal */}
