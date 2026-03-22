@@ -2,6 +2,7 @@
 
 import {
   Clock,
+  Download,
   Flame,
   MapPin,
   MessageSquare,
@@ -10,6 +11,7 @@ import {
   Search,
   Star,
   Trophy,
+  Trash2,
   Users,
   X
 } from 'lucide-react';
@@ -241,6 +243,101 @@ export default function Dashboard() {
     }
   };
 
+  const deleteSelectedLeads = async () => {
+    if (selectedLeadIds.length === 0) {
+      const confirmAll = confirm('Delete all leads? This cannot be undone.');
+      if (!confirmAll) return;
+      try {
+        const res = await fetchAPI('/leads', { method: 'DELETE' });
+        if (!res.success) throw new Error(res.error || 'Failed to delete leads');
+        setLeads([]);
+        setSelectedLeadIds([]);
+        alert(res.message || 'All leads deleted.');
+      } catch (error: any) {
+        alert(`Delete failed: ${error.message}`);
+      }
+      return;
+    }
+
+    const confirmDelete = confirm(`Delete ${selectedLeadIds.length} selected lead(s)? This cannot be undone.`);
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetchAPI('/leads/bulk/delete', {
+        method: 'DELETE',
+        body: JSON.stringify({ ids: selectedLeadIds }),
+      });
+      if (!res.success) throw new Error(res.error || 'Failed to delete selected leads');
+      setLeads(leads.filter((lead) => !selectedLeadIds.includes(lead._id)));
+      setSelectedLeadIds([]);
+      alert(`Deleted ${res.data?.deletedCount ?? selectedLeadIds.length} lead(s).`);
+    } catch (error: any) {
+      alert(`Delete failed: ${error.message}`);
+    }
+  };
+
+  const exportLeadsToCsv = () => {
+    const exportLeads = selectedLeadIds.length > 0
+      ? leads.filter((lead) => selectedLeadIds.includes(lead._id))
+      : filteredLeads;
+
+    if (exportLeads.length === 0) {
+      alert('No leads to export.');
+      return;
+    }
+
+    const columns: Array<{ key: keyof Lead; label: string }> = [
+      { key: 'fullName', label: 'Full Name' },
+      { key: 'businessName', label: 'Business Name' },
+      { key: 'phone', label: 'Phone' },
+      { key: 'email', label: 'Email' },
+      { key: 'website', label: 'Website' },
+      { key: 'address', label: 'Address' },
+      { key: 'city', label: 'City' },
+      { key: 'category', label: 'Category' },
+      { key: 'rating', label: 'Rating' },
+      { key: 'reviewCount', label: 'Review Count' },
+      { key: 'priceLevel', label: 'Price Level' },
+      { key: 'description', label: 'Description' },
+      { key: 'source', label: 'Source' },
+      { key: 'status', label: 'Status' },
+      { key: 'isHotLead', label: 'Hot Lead' },
+      { key: 'priority', label: 'Priority' },
+      { key: 'createdAt', label: 'Created At' },
+    ];
+
+    const escapeCsv = (value: unknown) => {
+      if (value === null || value === undefined) return '';
+      const str = String(value).replace(/\r?\n|\r/g, ' ').trim();
+      if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const header = columns.map((c) => escapeCsv(c.label)).join(',');
+    const rows = exportLeads.map((lead) =>
+      columns.map((c) => {
+        const value = lead[c.key];
+        if (c.key === 'createdAt' && typeof value === 'string') {
+          return escapeCsv(new Date(value).toISOString());
+        }
+        return escapeCsv(value);
+      }).join(',')
+    );
+
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `leads_export_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const getWhatsAppLink = (phone: string) => `https://wa.me/${phone.replace(/\D/g, '')}`;
 
   const filteredLeads = leads.filter((lead) => {
@@ -410,6 +507,20 @@ export default function Dashboard() {
               style={{ padding: '12px 18px', borderRadius: 10, border: 'none', background: campaignRunning || selectedLeadIds.length === 0 ? '#e2e8f0' : '#16a34a', color: campaignRunning || selectedLeadIds.length === 0 ? '#94a3b8' : 'white', fontWeight: 700, fontSize: 13, cursor: campaignRunning || selectedLeadIds.length === 0 ? 'not-allowed' : 'pointer', boxShadow: campaignRunning || selectedLeadIds.length === 0 ? 'none' : '0 6px 16px rgba(22,163,74,0.35)' }}
             >
               {campaignRunning ? 'Starting...' : 'Run Campaign'}
+            </button>
+            <button
+              onClick={deleteSelectedLeads}
+              style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid #fee2e2', background: '#fff1f2', cursor: 'pointer', color: '#b91c1c', fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            >
+              <Trash2 style={{ width: 16, height: 16 }} />
+              Delete
+            </button>
+            <button
+              onClick={exportLeadsToCsv}
+              style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid #dbeafe', background: '#eff6ff', cursor: 'pointer', color: '#1d4ed8', fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            >
+              <Download style={{ width: 16, height: 16 }} />
+              Export CSV
             </button>
           </div>
           <button onClick={fetchData} style={{ padding: 12, borderRadius: 10, border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer' }}>

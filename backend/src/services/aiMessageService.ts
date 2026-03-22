@@ -3,7 +3,7 @@ import { delay } from '../utils/delay';
 import { logger } from '../utils/logger';
 
 const FIREWORKS_API_KEY = process.env.FIREWORKS_API_KEY ?? '';
-const FIREWORKS_TEXT_MODEL = process.env.FIREWORKS_TEXT_MODEL ?? 'accounts/fireworks/models/llama-v3p1-8b-instruct';
+const FIREWORKS_TEXT_MODEL = process.env.FIREWORKS_TEXT_MODEL ?? 'accounts/fireworks/models/deepseek-v3p1';
 const FIREWORKS_CHAT_ENDPOINT = process.env.FIREWORKS_CHAT_ENDPOINT ?? 'https://api.fireworks.ai/inference/v1/chat/completions';
 
 const MAX_MESSAGE_CHARS = 300;

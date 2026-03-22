@@ -45,7 +45,25 @@ const toPublicImagePath = (imagePath: string) => {
   return `${GENERATED_ASSETS_ROUTE}/${filename}`;
 };
 
-const ensureLeadInsights = async (lead: ILead) => {
+/**
+ * Builds a plain-text fallback message without calling AI.
+ * Used when AI message generation completely fails.
+ */
+const buildFallbackMessage = (lead: ILead, landingPageUrl: string, variant: 'A' | 'B'): string => {
+  const businessName = lead.businessName || lead.fullName || 'there';
+  const category = lead.category || 'businesses';
+  const city = lead.city ? ` in ${lead.city}` : '';
+  const ratingLine = lead.rating ? ` and your ${lead.rating}⭐ rating` : '';
+  const linkLine = ` Quick demo: ${landingPageUrl}`;
+  if (variant === 'A') {
+    return `Hi ${businessName}! I found you on Google Maps${city}${ratingLine}. We help ${category} get more bookings. Want a 2-minute demo?${linkLine}`.slice(0, 300);
+  }
+  return `Hi ${businessName}! Many ${category} businesses${city} miss leads without a clear landing page${ratingLine}. We can help with a fast page + WhatsApp capture.${linkLine} Want a quick demo?`.slice(0, 300);
+};
+
+// ─── Step 1: AI Insight Enrichment (NON-BLOCKING) ────────────────────────────
+// Generates AI insights and persists them to DB so subsequent runs skip the AI call.
+const ensureAndPersistInsights = async (lead: ILead): Promise<void> => {
   const hasInsights = Boolean(
     lead.aiPainPoints?.length ||
     lead.aiOutreachAngle ||
@@ -54,14 +72,55 @@ const ensureLeadInsights = async (lead: ILead) => {
   );
   if (hasInsights) return;
 
-  const insights = await generateLeadInsights(lead);
-  lead.aiPainPoints = insights.painPoints;
-  lead.aiOutreachAngle = insights.outreachAngle;
-  lead.aiIdealSolution = insights.idealSolution;
-  lead.aiLandingHeadline = insights.landingHeadline;
-  lead.aiLandingSubhead = insights.landingSubhead;
-  lead.aiLandingBullets = insights.landingBullets;
-  lead.aiLandingCta = insights.demoCta;
+  try {
+    logger.info(`Generating AI insights for: ${lead.businessName ?? lead.fullName}`);
+    const insights = await generateLeadInsights(lead);
+    lead.aiPainPoints = insights.painPoints;
+    lead.aiOutreachAngle = insights.outreachAngle;
+    lead.aiIdealSolution = insights.idealSolution;
+    lead.aiLandingHeadline = insights.landingHeadline;
+    lead.aiLandingSubhead = insights.landingSubhead;
+    lead.aiLandingBullets = insights.landingBullets;
+    lead.aiLandingCta = insights.demoCta;
+    // Persist to DB so we don't re-generate on every campaign run
+    await lead.save();
+    logger.info(`✅ AI insights saved for: ${lead.businessName ?? lead.fullName}`);
+  } catch (err: any) {
+    // NON-FATAL: continue with empty insights; message generation uses its own fallback
+    logger.warn(`⚠️ AI insights failed for "${lead.businessName ?? lead.fullName}": ${err.message}. Continuing without insights.`);
+  }
+};
+
+// ─── Step 2: Message Generation (NON-BLOCKING) ───────────────────────────────
+// Falls back to a hardcoded template if both the AI and service-level fallback fail.
+const safeGenerateMessage = async (
+  lead: ILead,
+  landingPageUrl: string,
+  variant: 'A' | 'B',
+  existingMessage?: string
+): Promise<string> => {
+  if (existingMessage) return existingMessage;
+
+  try {
+    const msg = await generatePersonalizedMessage(lead, landingPageUrl, variant);
+    if (msg) return msg;
+    throw new Error('Empty message returned from AI service');
+  } catch (err: any) {
+    logger.warn(`⚠️ Message generation failed: ${err.message}. Using hardcoded fallback.`);
+    return buildFallbackMessage(lead, landingPageUrl, variant);
+  }
+};
+
+// ─── Step 3: Image Generation (NON-BLOCKING) ─────────────────────────────────
+// Always returns null on failure — never throws.
+const safeGenerateImage = async (lead: ILead, existingPath?: string): Promise<string | null> => {
+  if (existingPath) return existingPath;
+  try {
+    return await generateHeroImage(lead);
+  } catch (err: any) {
+    logger.warn(`⚠️ Image generation failed: ${err.message}. Sending text-only.`);
+    return null;
+  }
 };
 
 export const processCampaignLead = async (campaignLeadId: string, includeImage: boolean) => {
@@ -94,31 +153,38 @@ export const processCampaignLead = async (campaignLeadId: string, includeImage: 
     return;
   }
 
+  // ── Step 1: AI Insights — errors are swallowed, NEVER block WhatsApp send ──
+  await ensureAndPersistInsights(lead);
+
+  // ── Step 2: Build message + image — errors produce safe fallbacks ──────────
+  const landingPageUrl = `${PUBLIC_WEB_URL.replace(/\/$/, '')}/demo/${lead._id}`;
+  if (!campaignLead.messageVariant) {
+    campaignLead.messageVariant = pickVariant(lead._id.toString());
+  }
+
+  const message = await safeGenerateMessage(
+    lead,
+    landingPageUrl,
+    campaignLead.messageVariant,
+    campaignLead.messageText ?? undefined
+  );
+  campaignLead.messageText = message;
+
+  let imagePath: string | null = null;
+  if (includeImage) {
+    imagePath = await safeGenerateImage(lead, campaignLead.heroImagePath ?? undefined);
+    if (imagePath) {
+      campaignLead.heroImagePath = imagePath;
+      lead.heroImagePath = toPublicImagePath(imagePath);
+    }
+  }
+
+  // ── Step 3: Random human-like delay, then SEND (this is the critical step) ─
+  const delayMs = getRandomDelay();
+  logger.info(`⏳ Waiting ${Math.round(delayMs / 1000)}s before sending to ${whatsappId}…`);
+  await delay(delayMs);
+
   try {
-    await ensureLeadInsights(lead);
-    const landingPageUrl = `${PUBLIC_WEB_URL.replace(/\/$/, '')}/demo/${lead._id}`;
-    if (!campaignLead.messageVariant) {
-      campaignLead.messageVariant = pickVariant(lead._id.toString());
-    }
-
-    const message = campaignLead.messageText
-      ?? await generatePersonalizedMessage(lead, landingPageUrl, campaignLead.messageVariant);
-    campaignLead.messageText = message;
-
-    let imagePath: string | null = null;
-    if (includeImage) {
-      imagePath = campaignLead.heroImagePath
-        ?? await generateHeroImage(lead);
-      if (imagePath) {
-        campaignLead.heroImagePath = imagePath;
-        lead.heroImagePath = toPublicImagePath(imagePath);
-      }
-    }
-
-    const delayMs = getRandomDelay();
-    logger.info(`Waiting ${delayMs}ms before sending to ${whatsappId}`);
-    await delay(delayMs);
-
     await sendWhatsAppMessage(whatsappId, message, imagePath);
 
     campaignLead.messageStatus = 'sent';
@@ -137,16 +203,16 @@ export const processCampaignLead = async (campaignLeadId: string, includeImage: 
     lead.lastContactedAt = campaignLead.lastContactedAt;
 
     await Promise.all([campaignLead.save(), lead.save()]);
-
-    logger.info(`Message sent to ${whatsappId} (${lead.businessName ?? lead.fullName})`);
+    logger.info(`✅ WhatsApp sent → ${whatsappId} (${lead.businessName ?? lead.fullName})`);
   } catch (error: any) {
+    // Only the WhatsApp send failure marks the campaign lead as failed
     campaignLead.messageStatus = 'failed';
-    campaignLead.error = error.message;
+    campaignLead.error = `WhatsApp send error: ${error.message}`;
     lead.messageStatus = 'failed';
     lead.lastContactedAt = new Date();
 
     await Promise.all([campaignLead.save(), lead.save()]);
-    logger.error(`Message failed for ${campaignLeadId}: ${error.message}`);
+    logger.error(`❌ WhatsApp send failed for ${campaignLeadId}: ${error.message}`);
     throw error;
   }
 };
