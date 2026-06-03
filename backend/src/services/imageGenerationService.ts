@@ -33,42 +33,42 @@ const getCategoryVisuals = (category: string): string => {
   const cat = category.toLowerCase();
   
   if (cat.includes('ca') || cat.includes('chartered') || cat.includes('accountant') || cat.includes('tax') || cat.includes('gst') || cat.includes('audit')) {
-    return 'a clean professional accountant desk with a high-end laptop showing a modern financial dashboard and tax website, leather notebook, calculator, glasses, trust and growth aesthetic';
+    return 'a high-end UI/UX mockup of a tax and financial services website, clean white layout with navy blue and gold accents, professional tables, glassmorphic booking card, Behance-style showcase';
   }
   
   if (cat.includes('dental') || cat.includes('clinic') || cat.includes('doctor') || cat.includes('medical') || cat.includes('health')) {
-    return 'a pristine doctor office desk with a modern tablet showing a patient booking website, stethoscope next to the tablet, clean medical interior background, professional and caring';
+    return 'a stunning landing page design for a luxury dental clinic, soft mint and blue color palette, intuitive doctor booking interface, clean iconography, high-key lighting UI, Dribbble-style showcase';
   }
   
   if (cat.includes('restaurant') || cat.includes('cafe') || cat.includes('food') || cat.includes('bakery')) {
-    return 'a rustic wooden restaurant table with a premium tablet showing a beautiful food menu and ordering website, a fresh coffee cup and a small plant, warm lighting, inviting and modern';
+    return 'a vibrant appetizing restaurant website design, full-width high-res food hero, elegant typography, warm earthy tones, modern online menu layout, food-delivery UI mockup';
   }
   
   if (cat.includes('salon') || cat.includes('beauty') || cat.includes('spa') || cat.includes('hair')) {
-    return 'a chic salon counter with a sleek laptop showing a beauty booking and services website, premium hair products in background, soft elegant lighting, stylish and professional';
+    return 'a sophisticated luxury salon website UI, rose gold and minimalist white palette, service list with price cards, elegant serif typography, fashion-editorial design style';
   }
   
   if (cat.includes('gym') || cat.includes('fitness') || cat.includes('yoga') || cat.includes('wellness')) {
-    return 'a modern gym reception desk with a tablet showing a fitness membership and class schedule website, gym water bottle and protein shaker next to it, high-energy gym background, clean and motivational';
+    return 'a high-energy fitness club landing page UI, dark mode design with neon lime and purple accents, bold motivational headers, grid layout for class schedules, startup-tech aesthetic';
   }
   
   if (cat.includes('real estate') || cat.includes('property') || cat.includes('builder') || cat.includes('architect')) {
-    return 'a designer architectural desk with a large tablet showing a luxury property listing website, blueprints and architectural tools nearby, high-end office background, success and growth';
+    return 'a premium architectural portfolio and real estate website design, wide-angle property banners, clean minimalist grid, luxury serif fonts, expert UI/UX showcase';
   }
   
   if (cat.includes('legal') || cat.includes('advocate') || cat.includes('lawyer') || cat.includes('attorney')) {
-    return 'a prestigious law office desk with a premium laptop showing a professional legal services website, legal gavel and books in background, classic and authoritative';
+    return 'an authoritative and modern law firm website layout, clean professional grid, trustworthy deep blue and grey accents, service expertise cards, prestigious serif typography';
   }
   
   if (cat.includes('school') || cat.includes('academy') || cat.includes('education') || cat.includes('tutor') || cat.includes('coaching')) {
-    return 'a bright modern student desk with a tablet showing an educational platform and course website, books and stationery, inspiring and vibrant';
+    return 'an inspiring and bright educational platform UI design, playful colors, student learning dashboard, vibrant icons, clean and modern school website layout';
   }
   
   if (cat.includes('tech') || cat.includes('software') || cat.includes('it') || cat.includes('digital')) {
-    return 'a high-tech developer desk with a premium monitor showing a modern software landing page, neon ambient lighting, mechanical keyboard, precision and innovation';
+    return 'a futuristic SaaS landing page UI mockup, dark background with complex neon gradients, feature cards with 3D icons, clean and sharp developer-focused design';
   }
   
-  return 'a professional business desk with a high-end laptop showing a modern company landing page, coffee cup, notebook, success and growth aesthetic';
+  return 'a professional high-end business landing page UI, modern clean grid, sharp headers, balanced white space, high-quality showcase mockup';
 };
 
 const buildPrompt = (lead: ILead) => {
@@ -76,13 +76,12 @@ const buildPrompt = (lead: ILead) => {
   const city = lead.city || '';
   const categoryVisuals = getCategoryVisuals(category);
 
-  return `A classic, professional marketing photo of ${categoryVisuals}. ` +
-    `The screen clearly shows a stunning, modern website layout designed for a ${category} in ${city}. ` +
-    `Photorealistic, 8K, high-end commercial photography. ` +
-    `Focus is sharp on the device screen showing the website. ` +
-    `Atmosphere of business growth, improvement, and modernization. ` +
-    `Cinematic lighting, warm and trustworthy colors. ` +
-    `NO distorted text, NO messy artifacts. Ultra detailed, magazine quality.`;
+  return `A high-end, professional UI/UX design showcase of ${categoryVisuals} for a ${category} in ${city}. ` +
+    `The design is presented as a clean, long-scroll landing page screenshot in a high-resolution 3D perspective mockup. ` +
+    `Modern web design features: clean typography, vibrant color scheme, professional layout, balanced white space. ` +
+    `Dribbble and Behance top-featured style. ` +
+    `Shot on a soft minimalist background with 3D depth and shadows. ` +
+    `8K resolution, ultra-clean design, magazine quality, NO messy artifacts.`;
 };
 
 export const generateHeroImage = async (lead: ILead): Promise<string | null> => {

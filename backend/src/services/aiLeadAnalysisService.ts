@@ -26,7 +26,7 @@ const buildPrompt = (lead: ILead) => {
   const category = lead.category || 'local business';
   const city = lead.city ? ` in ${lead.city}` : '';
 
-  return `You are a growth consultant. Analyze the lead and output JSON only.\n\n` +
+  return `You are a world-class growth copywriter and marketing strategist. Analyze this business and output JSON only.\n\n` +
     `Business Name: ${businessName}\n` +
     `Category: ${category}\n` +
     `City: ${lead.city ?? 'N/A'}\n` +
@@ -34,21 +34,23 @@ const buildPrompt = (lead: ILead) => {
     `Review Count: ${lead.reviewCount ?? 'N/A'}\n` +
     `Website: ${lead.website ? 'Yes' : 'No'}\n` +
     `Source: ${lead.source}\n\n` +
+    `Copywriting Strategy:\n` +
+    `- USE MILLION-DOLLAR COPYWRITING PRINCIPLES. Focus on "What's in it for the customer?"\n` +
+    `- Landing Headline: MUST BE A HOOK. Example: "Dominating [City] as the #1 [Category]" or "Your Best Work, Finally Shown Properly."\n` +
+    `- Landing Subhead: MUST FOCUS ON ROI. Mention speed, trust, or automated growth.\n` +
+    `- Pain Points: Direct and "Stinging". Why is a missing website costing them lakhs? (e.g., "Leaking map leads to competitors").\n` +
+    `- Bullets: Pure Benefits. Focus on: Instant Contact, Trust/Ratings, and 24/7 Automation.\n` +
+    `- TONE: Bold, Professional, and Visionary. You are showing them their future billion-dollar brand.\n\n` +
     `Requirements:\n` +
     `- Output valid JSON only (no markdown)\n` +
-    `- Keep language concise, friendly, non-judgmental\n` +
-    `- Pain points must be plausible and respectful\n` +
-    `- Focus on missing website, low conversion, online booking, trust, and lead capture\n` +
-    `- Include a demo CTA\n\n` +
-    `Return JSON with keys:\n` +
-    `pain_points (array of 2-4 strings),\n` +
-    `outreach_angle (string),\n` +
-    `landing_headline (string),\n` +
-    `landing_subhead (string),\n` +
-    `landing_bullets (array of 3 strings),\n` +
-    `demo_cta (string),\n` +
-    `ideal_solution (string).\n\n` +
-    `Context: We help ${category} businesses${city} improve bookings and conversions with modern websites and AI chat.`;
+    `- Return JSON with keys:\n` +
+    `pain_points (array of 3 specific economic pain points),\n` +
+    `outreach_angle (string - the "Reason Why" this business needs to move now),\n` +
+    `landing_headline (string - high-impact, bold),\n` +
+    `landing_subhead (string - benefit-driven),\n` +
+    `landing_bullets (array of 3 benefit-focused bullets),\n` +
+    `demo_cta (string - low friction action),\n` +
+    `ideal_solution (string - comprehensive digital transformation summary).`;
 };
 
 const fallbackInsights = (lead: ILead): LeadInsights => {
@@ -74,15 +76,22 @@ const fallbackInsights = (lead: ILead): LeadInsights => {
 };
 
 const parseJsonSafe = (content: string): any | null => {
-  const trimmed = content.trim();
-  const start = trimmed.indexOf('{');
-  const end = trimmed.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) return null;
   try {
-    return JSON.parse(trimmed.slice(start, end + 1));
+    // Attempt 1: Standard JSON parse
+    return JSON.parse(content);
   } catch {
-    return null;
+    try {
+      // Attempt 2: Extract JSON using regex (handles markdown backticks and extra text)
+      const jsonRegex = /\{[\s\S]*\}/;
+      const match = content.match(jsonRegex);
+      if (match) {
+        return JSON.parse(match[0]);
+      }
+    } catch {
+      return null;
+    }
   }
+  return null;
 };
 
 export const generateLeadInsights = async (lead: ILead): Promise<LeadInsights> => {

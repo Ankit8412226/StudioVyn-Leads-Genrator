@@ -18,9 +18,25 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const data = await fetchLead(id);
   const lead = data?.data?.lead;
   const businessName = lead?.businessName || lead?.fullName || 'Your Business';
+  const heroImageUrl = lead?.heroImagePath
+    ? `${API_BASE}${lead.heroImagePath.startsWith('/') ? '' : '/'}${lead.heroImagePath}`
+    : null;
+
   return {
-    title: `${businessName} — Free Website Demo | Studiovyn`,
-    description: lead?.aiLandingSubhead || `See your personalized website demo built for ${businessName}.`,
+    title: `${businessName} — Custom Website Demo | Studiovyn`,
+    description: `I've designed a specialized landing page for ${businessName}. See the mockup and why it will help you grow.`,
+    openGraph: {
+      title: `${businessName} x Studiovyn Demo`,
+      description: `See the new digital face of ${businessName}. Custom built for ${lead?.city || 'you'}.`,
+      images: heroImageUrl ? [{ url: heroImageUrl, width: 1200, height: 630, alt: businessName }] : [],
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${businessName} Custom Mockup`,
+      description: `See your personalized website demo by Studiovyn.`,
+      images: heroImageUrl ? [heroImageUrl] : [],
+    },
   };
 }
 

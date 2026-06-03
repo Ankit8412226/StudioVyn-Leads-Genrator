@@ -23,6 +23,48 @@ export const LEAD_SOURCES = [
 ] as const;
 export type LeadSource = typeof LEAD_SOURCES[number];
 
+// Qualification Status
+export const QUALIFICATION_STATUSES = ['HOT', 'WARM', 'COLD'] as const;
+export type QualificationStatus = typeof QUALIFICATION_STATUSES[number];
+
+// Validation Status
+export const VALIDATION_VALUES = ['valid', 'invalid', 'missing', 'suspicious'] as const;
+export type ValidationValue = typeof VALIDATION_VALUES[number];
+
+export interface IWebsiteAnalysis {
+  mobileResponsiveness: string;
+  uiQuality: string;
+  uxQuality: string;
+  designModernity: string;
+  loadingSpeed: string;
+  seoReadiness: string;
+  technicalSeo: string;
+  securitySignals: string;
+  ctaEffectiveness: string;
+  trustSignals: string;
+  conversionPotential: string;
+  detectedIssues: string[];
+  overallGrade: string;
+}
+
+export interface IEstimatedProjectValue {
+  websiteDevelopment?: string;
+  seo?: string;
+  branding?: string;
+  automation?: string;
+  aiIntegration?: string;
+  totalMin?: number;
+  totalMax?: number;
+  currency: string;
+}
+
+export interface IValidation {
+  email: ValidationValue;
+  phone: ValidationValue;
+  website: ValidationValue;
+  overallValid: boolean;
+}
+
 export interface ILead extends Document {
   // Contact Info
   fullName: string;
@@ -34,6 +76,7 @@ export interface ILead extends Document {
   businessName?: string;
   website?: string;
   category?: string;
+  industry?: string;
   rating?: number;
   reviewCount?: number;
   priceLevel?: string;
@@ -67,7 +110,7 @@ export interface ILead extends Document {
   respondedAt?: Date;
   lastInboundAt?: Date;
 
-  // AI Analysis
+  // AI Analysis (Legacy — from Fireworks)
   aiScore?: number;
   aiPotential?: string;
   aiJustification?: string;
@@ -83,10 +126,89 @@ export interface ILead extends Document {
   aiLandingCta?: string;
   heroImagePath?: string;
 
+  // === NEW: Gemini AI Enrichment (Phase 2) ===
+  aiSummary?: string;
+  aiOpportunityReport?: string;
+  aiRecommendations?: string[];
+  aiConfidenceScore?: number;
+
+  // === NEW: Website Analysis (Phase 3) ===
+  websiteAnalysis?: IWebsiteAnalysis;
+
+  // === NEW: Lead Qualification (Phase 4) ===
+  leadScore?: number;
+  agencyFitScore?: number;
+  opportunityScore?: number;
+  confidenceScore?: number;
+  qualificationStatus?: QualificationStatus;
+
+  // === NEW: Project Value Estimation (Phase 5) ===
+  estimatedProjectValue?: IEstimatedProjectValue;
+
+  // === NEW: Sales Insights (Phase 6) ===
+  outreachSummary?: string;
+  recommendedPitch?: string;
+  painPointsDetailed?: string[];
+  serviceRecommendations?: string[];
+  whyValuable?: string;
+
+  // === NEW: Data Validation (Phase 7) ===
+  validation?: IValidation;
+
+  // === NEW: Raw Data Preservation ===
+  rawExtractedData?: Record<string, any>;
+
+  // === NEW: Enrichment Tracking ===
+  enrichedAt?: Date;
+  enrichmentVersion?: number;
+
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
 }
+
+const WebsiteAnalysisSchema = new Schema<IWebsiteAnalysis>(
+  {
+    mobileResponsiveness: { type: String, default: 'unknown' },
+    uiQuality: { type: String, default: 'unknown' },
+    uxQuality: { type: String, default: 'unknown' },
+    designModernity: { type: String, default: 'unknown' },
+    loadingSpeed: { type: String, default: 'unknown' },
+    seoReadiness: { type: String, default: 'unknown' },
+    technicalSeo: { type: String, default: 'unknown' },
+    securitySignals: { type: String, default: 'unknown' },
+    ctaEffectiveness: { type: String, default: 'unknown' },
+    trustSignals: { type: String, default: 'unknown' },
+    conversionPotential: { type: String, default: 'unknown' },
+    detectedIssues: [{ type: String }],
+    overallGrade: { type: String, default: 'N/A' },
+  },
+  { _id: false }
+);
+
+const EstimatedProjectValueSchema = new Schema<IEstimatedProjectValue>(
+  {
+    websiteDevelopment: { type: String },
+    seo: { type: String },
+    branding: { type: String },
+    automation: { type: String },
+    aiIntegration: { type: String },
+    totalMin: { type: Number },
+    totalMax: { type: Number },
+    currency: { type: String, default: 'INR' },
+  },
+  { _id: false }
+);
+
+const ValidationSchema = new Schema<IValidation>(
+  {
+    email: { type: String, enum: VALIDATION_VALUES, default: 'missing' },
+    phone: { type: String, enum: VALIDATION_VALUES, default: 'missing' },
+    website: { type: String, enum: VALIDATION_VALUES, default: 'missing' },
+    overallValid: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
 
 const LeadSchema = new Schema<ILead>(
   {
@@ -100,6 +222,7 @@ const LeadSchema = new Schema<ILead>(
     businessName: { type: String, trim: true },
     website: { type: String, trim: true },
     category: { type: String, trim: true },
+    industry: { type: String, trim: true },
     rating: { type: Number },
     reviewCount: { type: Number },
     priceLevel: { type: String },
@@ -110,7 +233,7 @@ const LeadSchema = new Schema<ILead>(
     // Location
     address: { type: String },
     city: { type: String, index: true },
-    state: { type: String },
+    state: { type: String, index: true },
     country: { type: String, index: true },
 
     // Lead Metadata
@@ -133,7 +256,7 @@ const LeadSchema = new Schema<ILead>(
     respondedAt: { type: Date },
     lastInboundAt: { type: Date },
 
-    // AI Analysis
+    // AI Analysis (Legacy — from Fireworks)
     aiScore: { type: Number },
     aiPotential: { type: String },
     aiJustification: { type: String },
@@ -148,18 +271,62 @@ const LeadSchema = new Schema<ILead>(
     aiLandingBullets: [{ type: String }],
     aiLandingCta: { type: String },
     heroImagePath: { type: String },
+
+    // === NEW: Gemini AI Enrichment ===
+    aiSummary: { type: String },
+    aiOpportunityReport: { type: String },
+    aiRecommendations: [{ type: String }],
+    aiConfidenceScore: { type: Number },
+
+    // === NEW: Website Analysis ===
+    websiteAnalysis: { type: WebsiteAnalysisSchema },
+
+    // === NEW: Lead Qualification ===
+    leadScore: { type: Number, index: true },
+    agencyFitScore: { type: Number, index: true },
+    opportunityScore: { type: Number, index: true },
+    confidenceScore: { type: Number },
+    qualificationStatus: { type: String, enum: QUALIFICATION_STATUSES, index: true },
+
+    // === NEW: Project Value Estimation ===
+    estimatedProjectValue: { type: EstimatedProjectValueSchema },
+
+    // === NEW: Sales Insights ===
+    outreachSummary: { type: String },
+    recommendedPitch: { type: String },
+    painPointsDetailed: [{ type: String }],
+    serviceRecommendations: [{ type: String }],
+    whyValuable: { type: String },
+
+    // === NEW: Data Validation ===
+    validation: { type: ValidationSchema },
+
+    // === NEW: Raw Data Preservation ===
+    rawExtractedData: { type: Schema.Types.Mixed },
+
+    // === NEW: Enrichment Tracking ===
+    enrichedAt: { type: Date },
+    enrichmentVersion: { type: Number, default: 0 },
   },
   {
     timestamps: true,
   }
 );
 
-// Indexes
+// === Existing Indexes (Preserved) ===
 LeadSchema.index({ status: 1, createdAt: -1 });
 LeadSchema.index({ source: 1, createdAt: -1 });
 LeadSchema.index({ isHotLead: 1, status: 1 });
 LeadSchema.index({ messageStatus: 1, lastContactedAt: -1 });
 LeadSchema.index({ fullName: 'text', businessName: 'text', email: 'text' });
+
+// === NEW: Performance Indexes ===
+LeadSchema.index({ leadScore: -1, createdAt: -1 });
+LeadSchema.index({ qualificationStatus: 1, createdAt: -1 });
+LeadSchema.index({ agencyFitScore: -1 });
+LeadSchema.index({ 'estimatedProjectValue.totalMax': -1 });
+LeadSchema.index({ industry: 1, createdAt: -1 });
+LeadSchema.index({ enrichedAt: 1 });
 
 // Mark as hot lead if high rating and has phone
 LeadSchema.pre('save', function () {

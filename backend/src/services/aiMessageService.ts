@@ -19,14 +19,19 @@ const buildPrompt = (lead: ILead, landingPageUrl?: string | null, variant: Messa
   const city = lead.city ? ` in ${lead.city}` : '';
   const painPoints = (lead.aiPainPoints && lead.aiPainPoints.length > 0)
     ? lead.aiPainPoints.join('; ')
-    : 'Low online conversion, missing lead capture, limited booking clarity';
-  const outreachAngle = lead.aiOutreachAngle ?? 'A quick modern landing page + WhatsApp lead capture';
-  const demoLine = landingPageUrl ? `Include this demo link: ${landingPageUrl}` : 'Ask for a quick demo';
-  const variantGuidance = variant === 'A'
-    ? 'Variant A: ultra-short (1-2 sentences), soft CTA.'
-    : 'Variant B: slightly more detailed (2-3 sentences), include 1 pain point and demo link.';
-
-  return `Write a short, friendly WhatsApp outreach message.\n\nRules:\n- Max ${MAX_MESSAGE_CHARS} characters\n- Mention the business name\n- Reference the business category\n- Conversational, human tone\n- Avoid spammy or pushy wording\n- Output only the message text\n\nBusiness Name: ${businessName}\nCategory: ${category}\nCity: ${lead.city ?? 'N/A'}\nRating: ${lead.rating ?? 'N/A'}\nReview Count: ${lead.reviewCount ?? 'N/A'}\nWebsite: ${lead.website ? 'Yes' : 'No'}\nPain Points: ${painPoints}\nOutreach Angle: ${outreachAngle}\n${demoLine}\nVariant: ${variant}\n${variantGuidance}\n\nContext: You found them on Google Maps${city}. You help businesses improve online bookings and conversions.`;
+    : 'Losing map customers to competitors, zero digital lead capture';
+  
+  return `You are a high-performance growth marketer. Write a Curiosity-Driven WhatsApp message.\n\n` +
+    `Strategy:\n` +
+    `- USE MILLION-DOLLAR COPYWRITING. Focus on "The Gap" between where they are and where they could be.\n` +
+    `- Be professional, brief (Max 240 chars).\n` +
+    `- Reference their ${lead.rating ? `${lead.rating} star rating` : 'quality'}.\n` +
+    `- Ask a curiosity-gap question. Example: "Have you seen how your business looks on mobile lately?"\n\n` +
+    `Business: ${businessName}\n` +
+    `Category: ${category}\n` +
+    `Pain Points: ${painPoints}\n` +
+    `${landingPageUrl ? `Include Link: ${landingPageUrl}` : ''}\n\n` +
+    `Output only the message text. No subject lines. No emojis except one 🚀 or ✨.`;
 };
 
 const fallbackMessage = (lead: ILead, landingPageUrl?: string | null, variant: MessageVariant = 'A') => {

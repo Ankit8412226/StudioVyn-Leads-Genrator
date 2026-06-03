@@ -133,6 +133,8 @@ export const leadsApi = {
     api.post(`/leads/${id}/merge`, { duplicateIds }),
 
   getPipeline: () => api.get('/leads/pipeline'),
+  
+  enrich: (id: string) => api.post(`/leads/${id}/enrich`),
 };
 
 // Analytics API
@@ -147,6 +149,10 @@ export const analyticsApi = {
   getTeamPerformance: () => api.get('/analytics/team'),
 
   getGrowthTrends: () => api.get('/analytics/trends'),
+  
+  getMetrics: () => api.get('/dashboard/metrics'),
+  
+  getCharts: () => api.get('/analytics/charts'),
 };
 
 // Import API
@@ -166,6 +172,9 @@ export const importApi = {
 
   exportLeads: (params?: { status?: string; source?: string; startDate?: string; endDate?: string; format?: string }) =>
     api.get('/import/export', { params, responseType: 'blob' }),
+
+  exportLeadsCsv: (params?: { filter?: string; startDate?: string; endDate?: string; qualificationStatus?: string }) =>
+    api.get('/export/csv', { params, responseType: 'blob' }),
 
   getTemplate: (format?: string) =>
     api.get('/import/template', { params: { format }, responseType: 'blob' }),

@@ -1,0 +1,15 @@
+{
+  "reportType": "daily",
+  "generatedAt": "2026-06-03T04:39:13.905Z",
+  "dateRange": {
+    "start": "2026-06-01T18:30:00.000Z",
+    "end": "2026-06-02T18:29:59.999Z"
+  },
+  "stats": {
+    "totalLeads": 0,
+    "hotLeads": 0,
+    "warmLeads": 0,
+    "coldLeads": 0,
+    "pipelineValue": 0
+  }
+}

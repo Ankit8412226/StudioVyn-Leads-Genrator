@@ -746,7 +746,7 @@ export default function Dashboard() {
                         <p style={{ margin: '0 0 20px', fontSize: 13, color: '#5b21b6', lineHeight: 1.5 }}>Show them how a modern website acts as an automated growth engine, capturing local leads 24/7 while they sleep.</p>
                         <button
                           onClick={() => {
-                            const msg = `Hi ${selectedLeadForDetail.businessName}! I'm a local web strategist helping ${selectedLeadForDetail.category} businesses in ${selectedLeadForDetail.city} modernize. I noticed you have great reviews but no mobile home yet. I've designed a modern growth-focused mockup for you: ${window.location.origin}/demo/${selectedLeadForDetail._id}. It's built to turn your map views into booked appointments. Worth a quick chat?`;
+                            const msg = `Hi ${selectedLeadForDetail.businessName}! I'm a local web strategist helping ${selectedLeadForDetail.category} in ${selectedLeadForDetail.city} modernize. I've designed a modern growth-focused mockup for you — check the preview below 👇: ${window.location.origin}/demo/${selectedLeadForDetail._id}. It's built specifically to turn your map views into booked appointments. Worth a quick chat?`;
                             window.open(`https://wa.me/${(selectedLeadForDetail.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
                           }}
                           style={{ width: '100%', padding: '14px', borderRadius: 14, border: 'none', background: '#7c3aed', color: 'white', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 12px rgba(124,58,237,0.3)' }}
@@ -765,7 +765,7 @@ export default function Dashboard() {
                         <p style={{ margin: '0 0 20px', fontSize: 13, color: '#92400e', lineHeight: 1.5 }}>Focus on bringing their {selectedLeadForDetail.rating} star reputation into the modern era with a professional digital presence.</p>
                         <button
                           onClick={() => {
-                            const msg = `Hi ${selectedLeadForDetail.businessName}! I love the ${selectedLeadForDetail.rating} star service you provide to ${selectedLeadForDetail.city}. Businesses of your quality deserve a professional digital home to match. I've already started a modern website layout for you here: ${window.location.origin}/demo/${selectedLeadForDetail._id}. Let me know if you'd like to see how we can modernize your brands presence together!`;
+                            const msg = `Hi ${selectedLeadForDetail.businessName}! I love the ${selectedLeadForDetail.rating} star service you provide. Quality like yours deserves a professional digital home to match. I've already started a modern website layout for you — check the mockup preview below 👇: ${window.location.origin}/demo/${selectedLeadForDetail._id}. Let me know if you'd like to modernize your presence together!`;
                             window.open(`https://wa.me/${(selectedLeadForDetail.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
                           }}
                           style={{ width: '100%', padding: '14px', borderRadius: 14, border: 'none', background: '#d97706', color: 'white', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 12px rgba(217,119,6,0.3)' }}
@@ -784,7 +784,7 @@ export default function Dashboard() {
                         <p style={{ margin: '0 0 20px', fontSize: 13, color: '#115e59', lineHeight: 1.5 }}>Sell the efficiency of a website that handles inquiries while they focus on their core business work.</p>
                         <button
                           onClick={() => {
-                            const msg = `Hi ${selectedLeadForDetail.businessName}! I'm helping local ${selectedLeadForDetail.category} firms streamline their business with modern landing pages. A good site handles the FAQs so you can focus on the work. Built a custom, high-speed mockup for you to check out: ${window.location.origin}/demo/${selectedLeadForDetail._id}. Would love to help you modernize!`;
+                            const msg = `Hi ${selectedLeadForDetail.businessName}! I'm helping local firms streamline their business with modern landing pages. A good site handles the FAQs so you can focus on the work. Check out this custom mockup I built for you 👇: ${window.location.origin}/demo/${selectedLeadForDetail._id}. Would love to help you modernize!`;
                             window.open(`https://wa.me/${(selectedLeadForDetail.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
                           }}
                           style={{ width: '100%', padding: '14px', borderRadius: 14, border: 'none', background: '#0d9488', color: 'white', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 12px rgba(13,148,136,0.3)' }}

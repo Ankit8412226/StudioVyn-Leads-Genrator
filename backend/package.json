@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "nodemon --exec ts-node src/index.ts",
+    "dev": "nodemon --ignore exports/ --exec ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "worker": "ts-node src/workers/messageQueueWorker.ts",
@@ -19,6 +19,7 @@
   "license": "MIT",
   "description": "Lead Collection & Management Backend API",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "bull": "^4.16.5",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",

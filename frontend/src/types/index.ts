@@ -21,6 +21,8 @@ export interface Lead {
     lat: number;
     lng: number;
   };
+  rating?: number;
+  reviewCount?: number;
   source: {
     platform: LeadSourcePlatform;
     campaign?: string;
@@ -64,6 +66,70 @@ export interface Lead {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
+
+  // === NEW fields for AI enrichment ===
+  aiSummary?: string;
+  aiOpportunityReport?: string;
+  aiRecommendations?: string[];
+  aiConfidenceScore?: number;
+  websiteAnalysis?: {
+    mobileResponsiveness: string;
+    uiQuality: string;
+    uxQuality: string;
+    designModernity: string;
+    loadingSpeed: string;
+    seoReadiness: string;
+    technicalSeo: string;
+    securitySignals: string;
+    ctaEffectiveness: string;
+    trustSignals: string;
+    conversionPotential: string;
+    detectedIssues: string[];
+    overallGrade: string;
+  };
+  leadScore?: number;
+  agencyFitScore?: number;
+  opportunityScore?: number;
+  confidenceScore?: number;
+  qualificationStatus?: 'HOT' | 'WARM' | 'COLD';
+  estimatedProjectValue?: {
+    websiteDevelopment?: string;
+    seo?: string;
+    branding?: string;
+    automation?: string;
+    aiIntegration?: string;
+    totalMin?: number;
+    totalMax?: number;
+    currency: string;
+  };
+  outreachSummary?: string;
+  recommendedPitch?: string;
+  painPointsDetailed?: string[];
+  serviceRecommendations?: string[];
+  whyValuable?: string;
+  validation?: {
+    email: 'valid' | 'invalid' | 'missing' | 'suspicious';
+    phone: 'valid' | 'invalid' | 'missing' | 'suspicious';
+    website: 'valid' | 'invalid' | 'missing' | 'suspicious';
+    overallValid: boolean;
+  };
+  enrichedAt?: string;
+  enrichmentVersion?: number;
+  
+  // Legacy fields
+  aiScore?: number;
+  aiPotential?: string;
+  aiJustification?: string;
+  aiRecommendedServices?: string[];
+  aiOutreachAngle?: string;
+  aiFollowUpMessage?: string;
+  aiConversionProbability?: number;
+  aiPainPoints?: string[];
+  aiIdealSolution?: string;
+  aiLandingHeadline?: string;
+  aiLandingSubhead?: string;
+  aiLandingBullets?: string[];
+  aiLandingCta?: string;
 }
 
 export type LeadStatus =
