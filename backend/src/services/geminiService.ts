@@ -311,8 +311,6 @@ Return JSON with value estimates:
   "total_max": 200000,
   "currency": "INR"
 }
-
-Value tiers:
 - Small/Simple: ₹15,000 - ₹30,000
 - Medium: ₹30,000 - ₹75,000
 - Large: ₹75,000 - ₹2,00,000
@@ -335,5 +333,17 @@ Value tiers:
 }
 
 export function isGeminiAvailable(): boolean {
-  return !!GEMINI_API_KEY;
+  return false;
 }
+
+
+
+
+
+
+
+
+
+
+
+

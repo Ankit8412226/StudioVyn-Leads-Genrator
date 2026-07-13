@@ -85,66 +85,6 @@ const buildPrompt = (lead: ILead) => {
 };
 
 export const generateHeroImage = async (lead: ILead): Promise<string | null> => {
-  if (!FIREWORKS_API_KEY) {
-    logger.warn('FIREWORKS_API_KEY not set. Skipping image generation.');
-    return null;
-  }
-
-  const businessName = lead.businessName || lead.fullName || 'business';
-  const fileName = `${sanitizeFilename(businessName)}.png`;
-  const outputPath = path.join(GENERATED_ASSETS_DIR, fileName);
-
-  if (fs.existsSync(outputPath)) {
-    return outputPath;
-  }
-
-  ensureDir(GENERATED_ASSETS_DIR);
-
-  try {
-    const prompt = buildPrompt(lead);
-
-    let arrayBuffer: ArrayBuffer | null = null;
-    let lastError: string | null = null;
-
-    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
-      const res = await fetch(FIREWORKS_IMAGE_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${FIREWORKS_API_KEY}`,
-          'Content-Type': 'application/json',
-          Accept: 'image/png',
-        },
-        body: JSON.stringify({
-          prompt,
-          aspect_ratio: '16:9',
-          guidance_scale: 3.5,
-          num_inference_steps: 8,
-        }),
-      });
-
-      if (res.ok) {
-        arrayBuffer = await res.arrayBuffer();
-        break;
-      }
-
-      const errorText = await res.text();
-      lastError = `Fireworks image error: ${res.status} ${errorText}`;
-
-      if (!isRetryableStatus(res.status) || attempt === RETRY_DELAYS_MS.length) {
-        throw new Error(lastError);
-      }
-
-      await delay(RETRY_DELAYS_MS[attempt]);
-    }
-
-    if (!arrayBuffer) {
-      throw new Error('Fireworks image error: empty response');
-    }
-
-    fs.writeFileSync(outputPath, Buffer.from(arrayBuffer));
-    return outputPath;
-  } catch (error: any) {
-    logger.error(`Image generation failed: ${error.message}`);
-    return null;
-  }
+  logger.warn('Image generation AI disabled. Skipping.');
+  return null;
 };

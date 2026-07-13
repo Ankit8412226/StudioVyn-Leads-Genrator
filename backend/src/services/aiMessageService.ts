@@ -51,61 +51,8 @@ export const generatePersonalizedMessage = async (
   landingPageUrl?: string | null,
   variant: MessageVariant = 'A'
 ): Promise<string> => {
-  if (!FIREWORKS_API_KEY) {
-    logger.warn('FIREWORKS_API_KEY not set. Using fallback message.');
-    return fallbackMessage(lead, landingPageUrl, variant).slice(0, MAX_MESSAGE_CHARS);
-  }
-
-  try {
-    const prompt = buildPrompt(lead, landingPageUrl, variant);
-
-    let data: any | null = null;
-    let lastError: string | null = null;
-
-    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
-      const res = await fetch(FIREWORKS_CHAT_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${FIREWORKS_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: FIREWORKS_TEXT_MODEL,
-          messages: [
-            { role: 'system', content: 'You write concise, friendly WhatsApp outreach messages.' },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.6,
-          max_tokens: 160,
-        }),
-      });
-
-      if (res.ok) {
-        data = await res.json();
-        break;
-      }
-
-      const errorText = await res.text();
-      lastError = `Fireworks chat error: ${res.status} ${errorText}`;
-
-      if (!isRetryableStatus(res.status) || attempt === RETRY_DELAYS_MS.length) {
-        throw new Error(lastError);
-      }
-
-      await delay(RETRY_DELAYS_MS[attempt]);
-    }
-
-    const message = data?.choices?.[0]?.message?.content?.trim();
-
-    if (!message) {
-      throw new Error('Fireworks returned empty message');
-    }
-
-    return message.slice(0, MAX_MESSAGE_CHARS);
-  } catch (error: any) {
-    logger.error(`AI message generation failed: ${error.message}`);
-    return fallbackMessage(lead, landingPageUrl, variant).slice(0, MAX_MESSAGE_CHARS);
-  }
+  logger.warn('Personalized messaging AI disabled. Using local fallback.');
+  return fallbackMessage(lead, landingPageUrl, variant).slice(0, MAX_MESSAGE_CHARS);
 };
 
 const buildFollowUpPrompt = (lead: ILead, landingPageUrl?: string | null, variant: MessageVariant = 'A') => {
@@ -137,57 +84,6 @@ export const generateFollowUpMessage = async (
   landingPageUrl?: string | null,
   variant: MessageVariant = 'A'
 ): Promise<string> => {
-  if (!FIREWORKS_API_KEY) {
-    logger.warn('FIREWORKS_API_KEY not set. Using fallback follow-up message.');
-    return fallbackFollowUp(lead, landingPageUrl, variant).slice(0, MAX_MESSAGE_CHARS);
-  }
-
-  try {
-    const prompt = buildFollowUpPrompt(lead, landingPageUrl, variant);
-
-    let data: any | null = null;
-    let lastError: string | null = null;
-
-    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
-      const res = await fetch(FIREWORKS_CHAT_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${FIREWORKS_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: FIREWORKS_TEXT_MODEL,
-          messages: [
-            { role: 'system', content: 'You write concise, friendly WhatsApp follow-ups.' },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.5,
-          max_tokens: 120,
-        }),
-      });
-
-      if (res.ok) {
-        data = await res.json();
-        break;
-      }
-
-      const errorText = await res.text();
-      lastError = `Fireworks follow-up error: ${res.status} ${errorText}`;
-
-      if (!isRetryableStatus(res.status) || attempt === RETRY_DELAYS_MS.length) {
-        throw new Error(lastError);
-      }
-
-      await delay(RETRY_DELAYS_MS[attempt]);
-    }
-
-    const message = data?.choices?.[0]?.message?.content?.trim();
-    if (!message) {
-      throw new Error('Fireworks returned empty follow-up message');
-    }
-    return message.slice(0, MAX_MESSAGE_CHARS);
-  } catch (error: any) {
-    logger.error(`AI follow-up generation failed: ${error.message}`);
-    return fallbackFollowUp(lead, landingPageUrl, variant).slice(0, MAX_MESSAGE_CHARS);
-  }
+  logger.warn('Follow-up messaging AI disabled. Using local fallback.');
+  return fallbackFollowUp(lead, landingPageUrl, variant).slice(0, MAX_MESSAGE_CHARS);
 };

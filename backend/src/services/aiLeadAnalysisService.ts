@@ -95,66 +95,6 @@ const parseJsonSafe = (content: string): any | null => {
 };
 
 export const generateLeadInsights = async (lead: ILead): Promise<LeadInsights> => {
-  if (!FIREWORKS_API_KEY) {
-    logger.warn('FIREWORKS_API_KEY not set. Using fallback insights.');
-    return fallbackInsights(lead);
-  }
-
-  try {
-    const prompt = buildPrompt(lead);
-    let data: any | null = null;
-    let lastError: string | null = null;
-
-    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
-      const res = await fetch(FIREWORKS_CHAT_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${FIREWORKS_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: FIREWORKS_TEXT_MODEL,
-          messages: [
-            { role: 'system', content: 'You produce concise JSON for lead analysis.' },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.4,
-          max_tokens: 300,
-        }),
-      });
-
-      if (res.ok) {
-        data = await res.json();
-        break;
-      }
-
-      const errorText = await res.text();
-      lastError = `Fireworks analysis error: ${res.status} ${errorText}`;
-
-      if (!isRetryableStatus(res.status) || attempt === RETRY_DELAYS_MS.length) {
-        throw new Error(lastError);
-      }
-
-      await delay(RETRY_DELAYS_MS[attempt]);
-    }
-
-    const raw = data?.choices?.[0]?.message?.content ?? '';
-    const parsed = parseJsonSafe(raw);
-    if (!parsed) {
-      throw new Error('Fireworks returned invalid JSON for lead analysis');
-    }
-
-    return {
-      painPoints: Array.isArray(parsed.pain_points) ? parsed.pain_points.slice(0, 4) : fallbackInsights(lead).painPoints,
-      outreachAngle: typeof parsed.outreach_angle === 'string' ? parsed.outreach_angle : fallbackInsights(lead).outreachAngle,
-      landingHeadline: typeof parsed.landing_headline === 'string' ? parsed.landing_headline : fallbackInsights(lead).landingHeadline,
-      landingSubhead: typeof parsed.landing_subhead === 'string' ? parsed.landing_subhead : fallbackInsights(lead).landingSubhead,
-      landingBullets: Array.isArray(parsed.landing_bullets) ? parsed.landing_bullets.slice(0, 3) : fallbackInsights(lead).landingBullets,
-      demoCta: typeof parsed.demo_cta === 'string' ? parsed.demo_cta : fallbackInsights(lead).demoCta,
-      idealSolution: typeof parsed.ideal_solution === 'string' ? parsed.ideal_solution : fallbackInsights(lead).idealSolution,
-    };
-  } catch (error: any) {
-    logger.error(`Lead analysis failed: ${error.message}`);
-    return fallbackInsights(lead);
-  }
+  logger.warn('Fireworks AI leads analysis disabled. Using local fallback.');
+  return fallbackInsights(lead);
 };
